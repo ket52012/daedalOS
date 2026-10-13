@@ -1,0 +1,142 @@
+import { useRef, useState } from "react";
+import { TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
+import { isSafari } from "utils/functions";
+
+export type MenuItem = {
+  action?: () => void;
+  checked?: boolean;
+  disabled?: boolean;
+  icon?: string;
+  label?: string;
+  menu?: MenuItem[];
+  primary?: boolean;
+  seperator?: boolean;
+  SvgIcon?: FC;
+  toggle?: boolean;
+  tooltip?: string;
+};
+
+export type MenuState = {
+  items?: MenuItem[];
+  label?: string;
+  staticX?: number;
+  staticY?: number;
+  x?: number;
+  y?: number;
+};
+
+export type CaptureTriggerEvent = React.MouseEvent | React.TouchEvent;
+
+type MenuOptions = {
+  staticX?: number;
+  staticY?: number;
+};
+
+export type ContextMenuCapture = {
+  onContextMenuCapture: (
+    event?: CaptureTriggerEvent,
+    domRect?: DOMRect,
+    options?: MenuOptions
+  ) => void;
+  onTouchEnd?: React.TouchEventHandler;
+  onTouchMove?: React.TouchEventHandler;
+  onTouchStart?: React.TouchEventHandler;
+};
+
+type MenuContextState = {
+  menu: MenuState;
+};
+
+type MenuContextActions = {
+  contextMenu: (
+    getItems: (event?: CaptureTriggerEvent) => MenuItem[],
+    label?: string
+  ) => ContextMenuCapture;
+  setMenu: React.Dispatch<React.SetStateAction<MenuState>>;
+};
+
+const useMenuContextState = (): {
+  actions: MenuContextActions;
+  state: MenuContextState;
+} => {
+  const [menu, setMenu] = useState<MenuState>(Object.create(null) as MenuState);
+  const touchTimer = useRef<number>(0);
+  const touchEvent = useRef<React.TouchEvent>(undefined);
+  const contextMenu = (
+    getItems: (event?: CaptureTriggerEvent) => MenuItem[],
+    label?: string
+  ): ContextMenuCapture => {
+    const onContextMenuCapture = (
+      event?: CaptureTriggerEvent,
+      domRect?: DOMRect,
+      options?: MenuOptions
+    ): void => {
+      const { staticX, staticY } = options || {};
+      let x = 0;
+      let y = 0;
+
+      // Clicks from the keyboard have no position, so open below the button
+      const keyboardClick = event?.type === "click" && event.detail === 0;
+      const menuRect = keyboardClick
+        ? event.currentTarget.getBoundingClientRect()
+        : domRect;
+
+      if (event && !keyboardClick) {
+        if (event.cancelable) event.preventDefault();
+
+        ({ pageX: x, pageY: y } =
+          "touches" in event ? event.touches.item?.(0) || event : event);
+      } else if (menuRect) {
+        const { height, x: inputX, y: inputY } = menuRect;
+
+        x = inputX;
+        y = inputY + height;
+      }
+
+      const items = getItems(event);
+
+      setMenu({
+        items: items.length > 0 ? items : undefined,
+        label: items.length > 0 ? label : undefined,
+        staticX,
+        staticY,
+        x,
+        y,
+      });
+    };
+
+    return {
+      onContextMenuCapture,
+      ...(isSafari() && {
+        onTouchEnd: (event) => {
+          if (touchEvent.current) {
+            event.preventDefault();
+            onContextMenuCapture(touchEvent.current);
+            touchEvent.current = undefined;
+          }
+          window.clearTimeout(touchTimer.current);
+          touchTimer.current = 0;
+        },
+        onTouchMove: () => {
+          touchEvent.current = undefined;
+          window.clearTimeout(touchTimer.current);
+          touchTimer.current = 0;
+        },
+        onTouchStart: (event: React.TouchEvent) => {
+          event.preventDefault();
+          window.clearTimeout(touchTimer.current);
+          touchTimer.current = window.setTimeout(() => {
+            touchEvent.current = event;
+          }, TRANSITIONS_IN_MILLISECONDS.LONG_PRESS);
+        },
+      }),
+    };
+  };
+
+  const actions = { contextMenu, setMenu };
+  const state = { menu };
+
+  return { actions, state };
+};
+
+export default useMenuContextState;

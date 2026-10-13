@@ -1,0 +1,448 @@
+import { basename, dirname } from "path";
+import { type ApiError } from "browserfs/dist/node/core/api_error";
+import { type SetStateAction, useEffect, useRef, useState } from "react";
+import { WALLPAPER_PATHS } from "components/system/Desktop/Wallpapers/constants";
+import { getShortcutInfo } from "components/system/Files/FileEntry/functions";
+import { type SortBy } from "components/system/Files/FileManager/useSortBy";
+import { useFileSystemActions, useRootFs } from "contexts/fileSystem";
+import {
+  type IconPositions,
+  type RecentFiles,
+  type SessionContextActions,
+  type SessionContextState,
+  type SessionData,
+  type SortOrders,
+  type Views,
+  type WallpaperFit,
+  type WindowStates,
+} from "contexts/session/types";
+import defaultSession from "public/session.json";
+import { setCurrentCloseEffect } from "utils/closeEffect";
+import {
+  DEFAULT_ASCENDING,
+  DEFAULT_CLOCK_SOURCE,
+  DEFAULT_CLOSE_EFFECT,
+  DEFAULT_THEME,
+  DEFAULT_WALLPAPER,
+  DEFAULT_WALLPAPER_FIT,
+  DESKTOP_PATH,
+  MILLISECONDS_IN_HOUR,
+  SESSION_FILE,
+  SHORTCUT_EXTENSION,
+  SYSTEM_FILES,
+  TRANSITIONS_IN_MILLISECONDS,
+} from "utils/constants";
+import {
+  getExtension,
+  maybeRequestIdleCallback,
+  preloadLibs,
+  updateIconPositionsIfEmpty,
+} from "utils/functions";
+import { loadSpawnFly, loadSpawnSheep } from "utils/loaders";
+
+const DEFAULT_SESSION = (
+  typeof window === "object" && "DEBUG_DEFAULT_SESSION" in window
+    ? window.DEBUG_DEFAULT_SESSION
+    : ((defaultSession || {}) as unknown)
+) as SessionData;
+
+const KEEP_RECENT_FILES_LIST_COUNT = 10;
+
+const useSessionContextState = (
+  getState: () => SessionContextState
+): {
+  actions: SessionContextActions;
+  state: SessionContextState;
+} => {
+  const { deletePath, lstat, readdir, readFile, writeFile } =
+    useFileSystemActions();
+  const rootFs = useRootFs();
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [foregroundId, setForegroundId] = useState("");
+  const [stackOrder, setStackOrder] = useState<string[]>([]);
+  const [themeName, setThemeName] = useState(DEFAULT_THEME);
+  const [clockSource, setClockSource] = useState(DEFAULT_CLOCK_SOURCE);
+  const [cursor, setCursor] = useState<string | undefined>();
+  const [aiEnabled, setAiEnabled] = useState<boolean>();
+  const [closeEffect, setCloseEffect] = useState(DEFAULT_CLOSE_EFFECT);
+  const [lazyZoo, setLazyZoo] = useState(false);
+  const [windowStates, setWindowStates] = useState(
+    Object.create(null) as WindowStates
+  );
+  const [sortOrders, setSortOrders] = useState(
+    Object.create(null) as SortOrders
+  );
+  const [views, setViews] = useState(Object.create(null) as Views);
+  const [iconPositions, setIconPositions] = useState(
+    Object.create(null) as IconPositions
+  );
+  const [wallpaperFit, setWallpaperFit] = useState(DEFAULT_WALLPAPER_FIT);
+  const [wallpaperImage, setWallpaperImage] = useState(DEFAULT_WALLPAPER);
+  const [runHistory, setRunHistory] = useState<string[]>([]);
+  const [recentFiles, setRecentFiles] = useState<RecentFiles>([]);
+  const updateRecentFiles = async (
+    url: string,
+    pid: string,
+    title?: string
+  ): Promise<void> => {
+    const ext = getExtension(url);
+
+    if (!(title || ext) || pid === "FileExplorer") return;
+
+    let baseUrl = url;
+    let baseTitle = title;
+
+    if (pid && ext === SHORTCUT_EXTENSION) {
+      ({ url: baseUrl } = getShortcutInfo(await readFile(url)));
+      baseTitle = title || basename(url, ext);
+    }
+
+    setRecentFiles((currentRecentFiles) => {
+      const entryIndex = currentRecentFiles.findIndex(
+        ([recentUrl, recentPid]) => recentUrl === baseUrl && recentPid === pid
+      );
+
+      if (entryIndex !== -1) {
+        return [
+          currentRecentFiles[entryIndex],
+          ...currentRecentFiles.slice(0, entryIndex),
+          ...currentRecentFiles.slice(entryIndex + 1),
+        ] as RecentFiles;
+      }
+
+      return [[baseUrl, pid, baseTitle], ...currentRecentFiles].slice(
+        0,
+        KEEP_RECENT_FILES_LIST_COUNT
+      ) as RecentFiles;
+    });
+  };
+  const prependToStack = (id: string): void =>
+    setStackOrder((currentStackOrder) =>
+      currentStackOrder[0] === id
+        ? currentStackOrder
+        : [id, ...currentStackOrder.filter((stackId) => stackId !== id)]
+    );
+  const removeFromStack = (id: string): void =>
+    setStackOrder((currentStackOrder) =>
+      currentStackOrder.filter((stackId) => stackId !== id)
+    );
+  const setWallpaper = (image: string, fit?: WallpaperFit): void => {
+    if (fit) setWallpaperFit(fit);
+    setWallpaperImage(image);
+  };
+  const [haltSession, setHaltSession] = useState(false);
+  const setSortOrder = (
+    directory: string,
+    order: ((currentSortOrder: string[]) => string[]) | string[],
+    sortBy?: SortBy,
+    ascending?: boolean
+  ): void =>
+    setSortOrders((currentSortOrder = {}) => {
+      const [currentOrder, currentSortBy, currentAscending] =
+        currentSortOrder[directory] || [];
+      const newOrder =
+        typeof order === "function" ? order(currentOrder) : order;
+
+      return {
+        ...currentSortOrder,
+        [directory]: [
+          newOrder,
+          sortBy ?? currentSortBy,
+          ascending ?? currentAscending ?? DEFAULT_ASCENDING,
+        ],
+      };
+    });
+  const initializedSession = useRef(false);
+  const setAndUpdateIconPositions = async (
+    positions: SetStateAction<IconPositions>
+  ): Promise<void> => {
+    if (typeof positions === "function") {
+      return setIconPositions(positions);
+    }
+
+    const [firstIcon] = Object.keys(positions) || [];
+    const isDesktop = firstIcon && DESKTOP_PATH === dirname(firstIcon);
+
+    if (isDesktop) {
+      const desktopGrid = document.querySelector("main > ol");
+
+      if (desktopGrid instanceof HTMLOListElement) {
+        // Read via getState so setAndUpdateIconPositions (and the actions
+        // context) keeps a stable identity across sort changes
+        const [desktopFileOrder = []] =
+          getState().sortOrders[DESKTOP_PATH] || [];
+
+        try {
+          const newDesktopFileOrder = [
+            ...new Set([
+              ...desktopFileOrder,
+              ...(await readdir(DESKTOP_PATH)).filter(
+                (entry) => !SYSTEM_FILES.has(entry)
+              ),
+            ]),
+          ];
+
+          return setIconPositions(
+            updateIconPositionsIfEmpty(
+              DESKTOP_PATH,
+              desktopGrid,
+              positions,
+              newDesktopFileOrder
+            )
+          );
+        } catch {
+          // Ignore failure to update icon positions with directory
+        }
+      }
+    }
+
+    return setIconPositions(positions);
+  };
+  const loadingDebounceRef = useRef(0);
+
+  useEffect(() => {
+    if (!loadingDebounceRef.current && sessionLoaded && !haltSession) {
+      maybeRequestIdleCallback(() => {
+        writeFile(
+          SESSION_FILE,
+          JSON.stringify({
+            aiEnabled,
+            clockSource,
+            closeEffect,
+            cursor,
+            iconPositions,
+            lazyZoo,
+            recentFiles,
+            runHistory,
+            sortOrders,
+            themeName,
+            views,
+            wallpaperFit,
+            wallpaperImage,
+            windowStates,
+          }),
+          true
+        );
+      });
+    }
+  }, [
+    aiEnabled,
+    clockSource,
+    closeEffect,
+    cursor,
+    haltSession,
+    iconPositions,
+    lazyZoo,
+    recentFiles,
+    runHistory,
+    sessionLoaded,
+    sortOrders,
+    themeName,
+    views,
+    wallpaperFit,
+    wallpaperImage,
+    windowStates,
+    writeFile,
+  ]);
+
+  useEffect(() => {
+    if (!initializedSession.current && rootFs) {
+      const restoreSession = async (): Promise<void> => {
+        let session = DEFAULT_SESSION;
+
+        try {
+          if ((await lstat(SESSION_FILE)).blocks > 0) {
+            session = JSON.parse(
+              (await readFile(SESSION_FILE)).toString()
+            ) as SessionData;
+          }
+        } catch {
+          // Ignore failure to read session
+        }
+
+        const sessionWallpaperImage =
+          session.wallpaperImage || DEFAULT_WALLPAPER;
+
+        // GALAXY is fully self-contained (no external libs), so there is
+        // nothing to preload and no reason to fetch its fallback chunk
+        if (
+          sessionWallpaperImage in WALLPAPER_PATHS &&
+          sessionWallpaperImage !== "GALAXY"
+        ) {
+          WALLPAPER_PATHS[sessionWallpaperImage]().then(({ libs }) =>
+            preloadLibs(libs)
+          );
+        }
+
+        if (session.clockSource) setClockSource(session.clockSource);
+        if (session.closeEffect) setCloseEffect(session.closeEffect);
+        if (session.cursor) setCursor(session.cursor);
+        if (typeof session.aiEnabled === "boolean") {
+          setAiEnabled(session.aiEnabled);
+        }
+        if (session.themeName) setThemeName(session.themeName);
+        if (session.wallpaperImage) {
+          setWallpaper(session.wallpaperImage, session.wallpaperFit);
+        }
+        if (session.sortOrders && Object.keys(session.sortOrders).length > 0) {
+          setSortOrders(session.sortOrders);
+        }
+        if (session.views && Object.keys(session.views).length > 0) {
+          setViews(session.views);
+        }
+        if (
+          session.iconPositions &&
+          Object.keys(session.iconPositions).length > 0
+        ) {
+          if (session !== DEFAULT_SESSION && DEFAULT_SESSION.iconPositions) {
+            const defaultIconPositions = Object.entries(
+              DEFAULT_SESSION.iconPositions
+            );
+
+            Object.keys({
+              ...DEFAULT_SESSION.iconPositions,
+              ...session.iconPositions,
+            }).forEach((iconPath) => {
+              const sessionIconPosition = session.iconPositions?.[iconPath];
+
+              if (sessionIconPosition) {
+                const [conflictingDefaultIconPath] =
+                  defaultIconPositions.find(
+                    ([defaultIconPath, { gridColumnStart, gridRowStart }]) =>
+                      defaultIconPath !== iconPath &&
+                      sessionIconPosition.gridColumnStart === gridColumnStart &&
+                      sessionIconPosition.gridRowStart === gridRowStart
+                  ) || [];
+
+                if (
+                  conflictingDefaultIconPath &&
+                  session.iconPositions?.[conflictingDefaultIconPath]
+                    ?.gridColumnStart === sessionIconPosition.gridColumnStart &&
+                  session.iconPositions?.[conflictingDefaultIconPath]
+                    ?.gridRowStart === sessionIconPosition.gridRowStart
+                ) {
+                  delete session.iconPositions[iconPath];
+                }
+              } else {
+                const defaultIconPosition =
+                  DEFAULT_SESSION.iconPositions[iconPath];
+
+                // Slot taken means the default icon was renamed or moved out
+                if (
+                  !Object.entries(session.iconPositions).some(
+                    ([path, { gridColumnStart, gridRowStart }]) =>
+                      dirname(path) === dirname(iconPath) &&
+                      gridColumnStart === defaultIconPosition.gridColumnStart &&
+                      gridRowStart === defaultIconPosition.gridRowStart
+                  )
+                ) {
+                  session.iconPositions[iconPath] = defaultIconPosition;
+                }
+              }
+            });
+          }
+          setIconPositions(session.iconPositions);
+        } else if (typeof session.iconPositions !== "object") {
+          setIconPositions(
+            DEFAULT_SESSION.iconPositions ||
+              (Object.create(null) as IconPositions)
+          );
+        }
+        if (
+          session.windowStates &&
+          Object.keys(session.windowStates).length > 0
+        ) {
+          setWindowStates(session.windowStates);
+        }
+        if (session.runHistory && session.runHistory.length > 0) {
+          setRunHistory(session.runHistory);
+        }
+        if (session.recentFiles && session.recentFiles.length > 0) {
+          setRecentFiles(session.recentFiles);
+        } else if (!Array.isArray(session.recentFiles)) {
+          setRecentFiles(DEFAULT_SESSION?.recentFiles || []);
+        }
+        if (session.lazyZoo) {
+          setLazyZoo(session.lazyZoo);
+
+          maybeRequestIdleCallback(() => {
+            window.setTimeout(async () => {
+              const { spawnSheep } = await loadSpawnSheep();
+
+              spawnSheep(true);
+            }, MILLISECONDS_IN_HOUR);
+            window.setTimeout(async () => {
+              const { spawnFly } = await loadSpawnFly();
+
+              spawnFly();
+            }, 4 * MILLISECONDS_IN_HOUR);
+          });
+        }
+      };
+
+      const initSession = async (): Promise<void> => {
+        initializedSession.current = true;
+
+        try {
+          await restoreSession();
+        } catch (error) {
+          if ((error as ApiError)?.code === "ENOENT") {
+            deletePath(SESSION_FILE);
+          }
+        }
+
+        loadingDebounceRef.current = window.setTimeout(() => {
+          loadingDebounceRef.current = 0;
+          window.sessionIsWriteable = true;
+        }, TRANSITIONS_IN_MILLISECONDS.WINDOW * 2);
+
+        setSessionLoaded(true);
+      };
+
+      initSession();
+    }
+  }, [deletePath, lstat, readFile, rootFs, setWallpaper]);
+
+  useEffect(() => setCurrentCloseEffect(closeEffect), [closeEffect]);
+
+  const actions = {
+    prependToStack,
+    removeFromStack,
+    setAiEnabled,
+    setClockSource,
+    setCloseEffect,
+    setCursor,
+    setForegroundId,
+    setHaltSession,
+    setIconPositions: setAndUpdateIconPositions,
+    setRunHistory,
+    setSortOrder,
+    setThemeName,
+    setViews,
+    setWallpaper,
+    setWindowStates,
+    updateRecentFiles,
+  };
+  const state = {
+    aiEnabled,
+    clockSource,
+    closeEffect,
+    cursor,
+    foregroundId,
+    iconPositions,
+    recentFiles,
+    runHistory,
+    sessionLoaded,
+    sortOrders,
+    stackOrder,
+    themeName,
+    views,
+    wallpaperFit,
+    wallpaperImage,
+    windowStates,
+  };
+
+  return { actions, state };
+};
+
+export default useSessionContextState;

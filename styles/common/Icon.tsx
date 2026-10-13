@@ -1,0 +1,193 @@
+import { basename } from "path";
+import { useEffect, useState } from "react";
+import styled from "styled-components";
+import {
+  MAX_RES_ICON_OVERRIDE,
+  SUPPORTED_ICON_PIXEL_RATIOS,
+} from "utils/constants";
+import {
+  cleanUpBufferUrl,
+  createFallbackSrcSet,
+  getExtension,
+  getMimeType,
+  imageSrc,
+  imageSrcs,
+  isDynamicIcon,
+  supportsWebp,
+} from "utils/functions";
+
+export type IconProps = {
+  $eager?: boolean;
+  $moving?: boolean;
+  displaySize?: number;
+  imgSize: number;
+  singleSrc?: boolean;
+  src?: string;
+};
+
+type StyledIconProps = Pick<IconProps, "$eager" | "$moving"> & {
+  $height: number;
+  $loaded: boolean;
+  $offset: number | string;
+  $width: number;
+};
+
+const StyledIcon = styled.img.attrs<StyledIconProps>(
+  ({ $eager = false, $height, $width }) => ({
+    decoding: "async",
+    draggable: false,
+    fetchPriority: $eager ? "high" : undefined,
+    height: $height,
+    loading: $eager ? "eager" : "lazy",
+    width: $width,
+  })
+)<StyledIconProps>`
+  aspect-ratio: 1;
+  left: ${({ $offset }) => $offset || undefined};
+  max-height: ${({ $height }) => $height}px;
+  max-width: ${({ $width }) => $width}px;
+  min-height: ${({ $height }) => $height}px;
+  min-width: ${({ $width }) => $width}px;
+  object-fit: contain;
+  opacity: ${({ $moving }) => ($moving ? "50%" : "100%")};
+  pointer-events: none;
+  top: ${({ $offset }) => $offset || undefined};
+  visibility: ${({ $loaded }) => ($loaded ? "visible" : "hidden")};
+`;
+
+const supportedPixelRatios = new Map<string, number[]>();
+
+const getSupportedPixelRatios = (
+  imagePath: string,
+  extension: string
+): number[] => {
+  if (supportedPixelRatios.has(imagePath)) {
+    const cachedEntry = supportedPixelRatios.get(imagePath);
+
+    if (cachedEntry) return cachedEntry;
+  }
+
+  let ratios = SUPPORTED_ICON_PIXEL_RATIOS;
+  const iconOverride = MAX_RES_ICON_OVERRIDE[basename(imagePath, extension)];
+
+  if (iconOverride) {
+    const [expectedSize, maxIconSize] = iconOverride;
+
+    if (expectedSize && maxIconSize) {
+      const maxRatio = Math.floor(maxIconSize / expectedSize);
+
+      ratios = SUPPORTED_ICON_PIXEL_RATIOS.filter((ratio) => ratio <= maxRatio);
+    }
+  }
+
+  supportedPixelRatios.set(imagePath, ratios);
+
+  return ratios;
+};
+
+const Icon: FCWithRef<
+  HTMLImageElement,
+  IconProps & Omit<React.ImgHTMLAttributes<HTMLImageElement>, "src">
+> = ({
+  alt = "",
+  displaySize = 0,
+  imgSize = 0,
+  onLoad,
+  ref,
+  singleSrc = false,
+  src = "",
+  ...componentProps
+}) => {
+  const [loaded, setLoaded] = useState(false);
+  const size = displaySize > imgSize ? imgSize : displaySize || imgSize;
+  const dimensionProps = {
+    $height: size,
+    $offset: displaySize > imgSize ? `${displaySize - imgSize}px` : 0,
+    $width: size,
+  };
+  const [failedUrls, setFailedUrls] = useState<string[]>([]);
+  const onError: React.ReactEventHandler<HTMLImageElement> = ({ target }) => {
+    const { currentSrc = "" } = (target as HTMLImageElement) || {};
+    let pathname = "";
+
+    try {
+      pathname = new URL(currentSrc).pathname;
+    } catch {
+      // Ignore failure to log failed url
+    }
+
+    if (pathname && !failedUrls.includes(pathname)) {
+      setFailedUrls((currentFailedUrls) => [...currentFailedUrls, pathname]);
+    }
+  };
+  const onLoadHandler: React.ReactEventHandler<HTMLImageElement> = (event) => {
+    setLoaded(true);
+    onLoad?.(event);
+  };
+
+  useEffect(
+    () => () => {
+      if (loaded && src.startsWith("blob:")) cleanUpBufferUrl(src);
+    },
+    [loaded, src]
+  );
+
+  const isDynamic = isDynamicIcon(src);
+  const imgSrc =
+    isDynamic && !supportsWebp() ? src.replace(getExtension(src), ".png") : src;
+  const srcExt = getExtension(imgSrc);
+
+  return (
+    <picture>
+      {!singleSrc &&
+        isDynamic &&
+        getSupportedPixelRatios(imgSrc, srcExt).map((ratio) => {
+          const srcSet = imageSrc(imgSrc, imgSize, ratio, srcExt);
+          const mediaRatio = ratio - 0.99;
+
+          if (
+            failedUrls.length > 0 &&
+            failedUrls.includes(srcSet.split(" ")[0])
+          ) {
+            // eslint-disable-next-line unicorn/no-null
+            return null;
+          }
+
+          return (
+            <source
+              key={ratio}
+              media={
+                ratio > 1
+                  ? `(min-resolution: ${mediaRatio}x), (-webkit-min-device-pixel-ratio: ${mediaRatio})`
+                  : undefined
+              }
+              srcSet={srcSet}
+              type={getMimeType(srcExt)}
+            />
+          );
+        })}
+      <StyledIcon
+        ref={ref}
+        $loaded={loaded}
+        alt={alt}
+        onError={onError}
+        onLoad={onLoadHandler}
+        src={
+          isDynamic ? imageSrc(imgSrc, imgSize, 1, srcExt) : src || undefined
+        }
+        srcSet={
+          !singleSrc && isDynamic
+            ? imageSrcs(imgSrc, imgSize, srcExt, failedUrls) ||
+              (failedUrls.length === 0
+                ? ""
+                : createFallbackSrcSet(imgSrc, failedUrls))
+            : undefined
+        }
+        {...componentProps}
+        {...dimensionProps}
+      />
+    </picture>
+  );
+};
+
+export default Icon;
