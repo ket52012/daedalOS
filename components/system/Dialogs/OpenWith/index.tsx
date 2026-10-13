@@ -1,0 +1,201 @@
+import { useEffect, useRef, useState } from "react";
+import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
+import StyledOpenWith from "components/system/Dialogs/OpenWith/StyledOpenWith";
+import StyledOpenWithList from "components/system/Dialogs/OpenWith/StyledOpenWithList";
+import useCloseOnEscape from "components/system/Dialogs/useCloseOnEscape";
+import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
+import { useProcess, useProcessesActions } from "contexts/process";
+import directory from "contexts/process/directory";
+import { useForegroundId, useSessionActions } from "contexts/session";
+import Button from "styles/common/Button";
+import Icon from "styles/common/Icon";
+import { PREVENT_SCROLL, TRANSITIONS_IN_MILLISECONDS } from "utils/constants";
+import { getExtension, haltEvent } from "utils/functions";
+import { focusByKey } from "utils/keyboard";
+
+const INCLUDED_PROCESSES = new Set([
+  "JSDOS",
+  "MonacoEditor",
+  "PDF",
+  "Paint",
+  "Photos",
+  "VideoPlayer",
+]);
+
+type OpenWithEntryProps = {
+  icon: string;
+  onClick: () => void;
+  onRun: () => void;
+  selected: boolean;
+  title: string;
+};
+
+const OpenWithEntry: FC<OpenWithEntryProps> = ({
+  icon,
+  onClick,
+  onRun,
+  selected,
+  title,
+}) => (
+  <li className={selected ? "selected" : ""}>
+    <Button
+      aria-label={title}
+      aria-pressed={selected}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          haltEvent(event);
+          onRun();
+        }
+      }}
+    >
+      <figure>
+        <Icon alt="" displaySize={24} imgSize={32} src={icon} />
+        <figcaption>{title}</figcaption>
+      </figure>
+    </Button>
+  </li>
+);
+
+const OpenWith: FC<ComponentProcessProps> = ({ id }) => {
+  // Process ids can contain paths with spaces, which are invalid in id
+  // attributes and split aria-labelledby's IDREF list
+  const primaryLabelId = `openwith-primary-${id}`.replace(/\s/g, "_");
+  const otherLabelId = `openwith-other-${id}`.replace(/\s/g, "_");
+  const { closeWithTransition, open } = useProcessesActions();
+  const { setForegroundId, updateRecentFiles } = useSessionActions();
+  const foregroundId = useForegroundId();
+  const { url } = useProcess(id);
+  const urlExtension = url ? getExtension(url) : "";
+  const primaryExtensionProcesses = getProcessByFileExtension(urlExtension);
+  const { icon: primaryIcon, title: primaryTitle } =
+    (primaryExtensionProcesses && directory[primaryExtensionProcesses]) || {};
+  const [selectedPid, setSelectedPid] = useState(primaryExtensionProcesses);
+  const [closeOnBlur, setCloseOnBlur] = useState(false);
+  const recentlySelectedPid = useRef("");
+  const runApp = (pid: string): void => {
+    open(pid, { url });
+    closeWithTransition(id);
+    if (url && pid) updateRecentFiles(url, pid);
+  };
+  const updateSelectedPid = (pid: string): void => {
+    if (recentlySelectedPid.current === pid) {
+      runApp(pid);
+    } else {
+      recentlySelectedPid.current = pid;
+
+      setTimeout(() => {
+        recentlySelectedPid.current = "";
+      }, TRANSITIONS_IN_MILLISECONDS.DOUBLE_CLICK);
+
+      setSelectedPid(pid);
+    }
+  };
+  const closeOnEscape = useCloseOnEscape(id);
+
+  useEffect(() => {
+    const isForeground = foregroundId === id;
+    let cleanup: (() => void) | undefined;
+
+    if (closeOnBlur) {
+      if (!isForeground) closeWithTransition(id);
+    } else {
+      if (!isForeground) setForegroundId(id);
+
+      const timeoutId = window.setTimeout(
+        () => setCloseOnBlur(true),
+        TRANSITIONS_IN_MILLISECONDS.WINDOW
+      );
+
+      cleanup = () => window.clearTimeout(timeoutId);
+    }
+
+    return cleanup;
+  }, [closeOnBlur, closeWithTransition, foregroundId, id, setForegroundId]);
+
+  return (
+    <StyledOpenWith
+      ref={(element) => {
+        // Like Windows, the chosen app has focus
+        (
+          element?.querySelector<HTMLElement>("li.selected > button") || element
+        )?.focus(PREVENT_SCROLL);
+      }}
+      onContextMenu={haltEvent}
+      onKeyDown={(event) => {
+        const { activeElement } = document;
+        const entries = [
+          ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+            "li > button"
+          ),
+        ];
+
+        if (
+          (event.target === event.currentTarget ||
+            entries.includes(event.target as HTMLButtonElement)) &&
+          focusByKey(event.key, entries, { horizontal: false, wrap: false })
+        ) {
+          haltEvent(event);
+
+          // Like the Windows list, selection follows the arrow keys
+          if (document.activeElement !== activeElement) {
+            (document.activeElement as HTMLButtonElement).click();
+            // Only a second click opens it, not Space after an arrow key
+            recentlySelectedPid.current = "";
+          }
+        }
+      }}
+      {...closeOnEscape}
+    >
+      <h2>How do you want to open this file?</h2>
+      <div>
+        {primaryTitle && primaryIcon && (
+          <>
+            <h4 aria-level={3} id={primaryLabelId}>
+              Keep using this app
+            </h4>
+            <StyledOpenWithList aria-labelledby={primaryLabelId}>
+              <OpenWithEntry
+                key={primaryTitle}
+                icon={primaryIcon}
+                onClick={() => updateSelectedPid(primaryExtensionProcesses)}
+                onRun={() => runApp(primaryExtensionProcesses)}
+                selected={selectedPid === primaryExtensionProcesses}
+                title={primaryTitle}
+              />
+            </StyledOpenWithList>
+            <h4 aria-level={3} id={otherLabelId}>
+              Other options
+            </h4>
+          </>
+        )}
+        <StyledOpenWithList
+          $hideBorder={!primaryTitle || !primaryIcon}
+          {...(primaryTitle &&
+            primaryIcon && { "aria-labelledby": otherLabelId })}
+        >
+          {Object.entries(directory)
+            .filter(
+              ([pid]) =>
+                INCLUDED_PROCESSES.has(pid) && pid !== primaryExtensionProcesses
+            )
+            .map(([pid, { icon, title }]) => (
+              <OpenWithEntry
+                key={title}
+                icon={icon}
+                onClick={() => updateSelectedPid(pid)}
+                onRun={() => runApp(pid)}
+                selected={selectedPid === pid}
+                title={title}
+              />
+            ))}
+        </StyledOpenWithList>
+      </div>
+      <nav role="presentation">
+        <Button onClick={() => runApp(selectedPid)}>OK</Button>
+      </nav>
+    </StyledOpenWith>
+  );
+};
+
+export default OpenWith;

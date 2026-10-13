@@ -1,0 +1,103 @@
+import { Fragment, useEffect, useState } from "react";
+import { type PropertiesMetaData } from "components/system/Dialogs/Properties";
+import Buttons from "components/system/Dialogs/Properties/Buttons";
+import StyledDetailsTab from "components/system/Dialogs/Properties/StyledDetailsTab";
+import useExif from "components/system/Dialogs/Properties/useExif";
+import useMediaType from "components/system/Dialogs/Properties/useMediaType";
+import { useFileSystemActions } from "contexts/fileSystem";
+
+type TabProps = {
+  hasExif: boolean;
+  id: string;
+  metaData: PropertiesMetaData;
+  setMetaData: React.Dispatch<React.SetStateAction<PropertiesMetaData>>;
+  tabPanel: React.HTMLAttributes<HTMLElement>;
+  url?: string;
+};
+
+const DetailsTab: FC<TabProps> = ({
+  hasExif,
+  id,
+  metaData,
+  setMetaData,
+  tabPanel,
+  url,
+}) => {
+  const loading = !(metaData.exif || metaData.mediaType);
+  const { readFile } = useFileSystemActions();
+  const [fileData, setFileData] = useState<Buffer | undefined>();
+
+  useExif(hasExif ? fileData : undefined, metaData.exif, setMetaData);
+  useMediaType(fileData, metaData.mediaType, setMetaData);
+
+  useEffect(() => {
+    if (loading && url && !fileData) readFile(url).then(setFileData);
+  }, [fileData, loading, readFile, url]);
+
+  return (
+    <>
+      <StyledDetailsTab aria-busy={loading || undefined} {...tabPanel}>
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Like the scrolling list of Windows, which not every browser lets Tab reach */}
+        <table aria-label="Details" tabIndex={0}>
+          <thead>
+            <tr>
+              <th className="property" scope="col">
+                Property
+              </th>
+              <th className="value" scope="col">
+                Value
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr className="header">
+                <td colSpan={2}>Loading...</td>
+              </tr>
+            )}
+            {!loading &&
+              Object.entries({ ...metaData.exif, ...metaData.mediaType }).map(
+                ([key, data], index) => (
+                  // eslint-disable-next-line react/no-array-index-key
+                  <Fragment key={`${key}${index}`}>
+                    <tr className="header">
+                      <th>{key}</th>
+                      <th aria-hidden="true" className="line" />
+                    </tr>
+                    {Object.entries(data)
+                      .filter(
+                        ([, value]) =>
+                          typeof value === "string" || typeof value === "number"
+                      )
+                      .map(([dataKey, value]) => (
+                        <tr key={`${dataKey}-${value}`}>
+                          <th scope="row" title={dataKey}>
+                            {dataKey}
+                          </th>
+                          <td>
+                            {typeof value === "string" &&
+                            value.startsWith("blob:") ? (
+                              <img
+                                alt="Thumbnail"
+                                decoding="async"
+                                loading="lazy"
+                                src={value}
+                              />
+                            ) : (
+                              value
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </Fragment>
+                )
+              )}
+          </tbody>
+        </table>
+      </StyledDetailsTab>
+      <Buttons id={id} />
+    </>
+  );
+};
+
+export default DetailsTab;
