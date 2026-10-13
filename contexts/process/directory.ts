@@ -13,6 +13,21 @@ const directory: Processes = {
     icon: "/System/Icons/chromium.webp",
     title: "浏览器",
   },
+  DevTools: {
+    backgroundColor: "#242424",
+    Component: dynamic(() => import("components/apps/DevTools")),
+    defaultSize: {
+      height: 380,
+      width: 545,
+    },
+    icon: "/System/Icons/eruda.webp",
+    libs: [
+      "/Program Files/Eruda/eruda.js",
+      "/Program Files/Eruda/eruda-monitor.js",
+    ],
+    singleton: true,
+    title: "开发者工具",
+  },
   DXBall: {
     backgroundColor: "#000",
     Component: dynamic(() => import("components/apps/DX-Ball")),
@@ -20,7 +35,7 @@ const directory: Processes = {
     libs: ["/Program Files/DX-Ball/game.js"],
     lockAspectRatio: true,
     singleton: true,
-    title: "DX-Ball",
+    title: "DX打砖块",
   },
   Emulator: {
     backgroundColor: "#000",
@@ -65,6 +80,32 @@ const directory: Processes = {
     lockAspectRatio: true,
     title: "DOS模拟器",
   },
+  Marked: {
+    backgroundColor: "#FFF",
+    Component: dynamic(() => import("components/apps/Marked")),
+    defaultSize: {
+      height: 480,
+      width: 560,
+    },
+    icon: "/System/Icons/marked.webp",
+    isLightBg: true,
+    libs: [
+      "/Program Files/Marked/marked.min.js",
+      "/Program Files/Marked/purify.min.js",
+    ],
+    title: "Markdown阅读器",
+  },
+  Messenger: {
+    backgroundColor: "#242526",
+    Component: dynamic(() => import("components/apps/Messenger")),
+    defaultSize: {
+      height: 500,
+      width: 425,
+    },
+    icon: "/System/Icons/messenger.webp",
+    singleton: true,
+    title: "Messenger",
+  },
   MonacoEditor: {
     backgroundColor: "#1E1E1E",
     Component: dynamic(() => import("components/apps/MonacoEditor")),
@@ -108,7 +149,7 @@ const directory: Processes = {
     Component: dynamic(() => import("components/apps/PDF")),
     icon: "/System/Icons/pdf.webp",
     libs: ["/Program Files/PDF.js/pdf.js"],
-    title: "PDF",
+    title: "PDF阅读器",
   },
   Photos: {
     backgroundColor: "#222",
@@ -135,6 +176,30 @@ const directory: Processes = {
     icon: "",
     isLightBg: true,
     title: "属性",
+  },
+  Quake3: {
+    backgroundColor: "#000",
+    Component: dynamic(() => import("components/apps/Quake3")),
+    defaultSize: {
+      height: 480,
+      width: 640,
+    },
+    icon: "/System/Icons/quake3.webp",
+    libs: ["/Program Files/Quake3/Quake3Game.js"],
+    lockAspectRatio: true,
+    title: "雷神之锤3",
+  },
+  Ruffle: {
+    backgroundColor: "#000",
+    Component: dynamic(() => import("components/apps/Ruffle")),
+    defaultSize: {
+      height: 400,
+      width: 550,
+    },
+    icon: "/System/Icons/ruffle.webp",
+    libs: ["/Program Files/Ruffle/ruffle.js"],
+    lockAspectRatio: true,
+    title: "Flash播放器",
   },
   Run: {
     allowResizing: false,
@@ -163,7 +228,7 @@ const directory: Processes = {
     hideTaskbarEntry: true,
     icon: "/System/Icons/screensaver.webp",
     singleton: true,
-    title: "屏幕保护",
+    title: "Screen Saver",
   },
   SpaceCadet: {
     backgroundColor: "#000",
@@ -177,6 +242,18 @@ const directory: Processes = {
     libs: ["/Program Files/SpaceCadet/SpaceCadetPinball.js"],
     lockAspectRatio: true,
     title: "3D弹球",
+  },
+  StableDiffusion: {
+    backgroundColor: "rgb(235, 251, 247)",
+    Component: dynamic(() => import("components/apps/StableDiffusion")),
+    defaultSize: {
+      height: 644,
+      width: 538,
+    },
+    icon: "/System/Icons/stablediffusion.webp",
+    isLightBg: true,
+    singleton: true,
+    title: "AI画图",
   },
   Terminal: {
     backgroundBlur: "8px",
@@ -196,6 +273,32 @@ const directory: Processes = {
     preferProcessIcon: true,
     title: "终端",
   },
+  Tic80: {
+    backgroundColor: "#1A1C2C",
+    Component: dynamic(() => import("components/apps/Tic80")),
+    defaultSize: {
+      height: 346,
+      width: 615,
+    },
+    dependantLibs: ["/Program Files/Tic80/tic80.wasm"],
+    icon: "/System/Icons/tic80.webp",
+    libs: ["/Program Files/Tic80/tic80.js"],
+    lockAspectRatio: true,
+    title: "TIC-80",
+  },
+  TinyMCE: {
+    backgroundColor: "#202124",
+    Component: dynamic(() => import("components/apps/TinyMCE")),
+    dependantLibs: [
+      "/Program Files/TinyMCE/themes/silver/theme.min.js",
+      "/Program Files/TinyMCE/models/dom/model.min.js",
+      "/Program Files/TinyMCE/icons/default/icons.min.js",
+      "/Program Files/TinyMCE/skins/ui/oxide/skin.min.css",
+    ],
+    icon: "/System/Icons/tinymce.webp",
+    libs: ["/Program Files/TinyMCE/tinymce.min.js"],
+    title: "富文本编辑器",
+  },
   Transfer: {
     allowResizing: false,
     backgroundColor: "#FFF",
@@ -208,6 +311,21 @@ const directory: Processes = {
     icon: "/System/Icons/copying.webp",
     isLightBg: true,
     title: "",
+  },
+  V86: {
+    allowResizing: false,
+    autoSizing: true,
+    backgroundColor: "#000",
+    Component: dynamic(() => import("components/apps/V86")),
+    defaultSize: {
+      height: 200,
+      width: 320,
+    },
+    dependantLibs: ["/Program Files/Virtual x86/v86.wasm"],
+    icon: "/System/Icons/v86.webp",
+    libs: ["/Program Files/Virtual x86/libv86.js"],
+    preferProcessIcon: true,
+    title: "x86虚拟机",
   },
   VideoPlayer: {
     autoSizing: true,
@@ -224,6 +342,28 @@ const directory: Processes = {
       "/Program Files/Video.js/Youtube.min.js",
     ],
     title: "视频播放器",
+  },
+  Vim: {
+    allowResizing: false,
+    backgroundColor: "#222324",
+    Component: dynamic(() => import("components/apps/Vim")),
+    defaultSize: {
+      height: 448,
+      width: 595,
+    },
+    icon: "/System/Icons/vim.webp",
+    libs: ["/Program Files/Vim.js/vim.js"],
+    singleton: true,
+    title: "Vim编辑器",
+  },
+  Webamp: {
+    allowResizing: false,
+    Component: dynamic(() => import("components/apps/Webamp")),
+    hasWindow: false,
+    icon: "/System/Icons/webamp.webp",
+    libs: ["/Program Files/Webamp/webamp.bundle.min.js"],
+    singleton: true,
+    title: "Winamp播放器",
   },
 };
 
