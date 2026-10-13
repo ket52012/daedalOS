@@ -1,0 +1,65 @@
+import { useEffect, useRef } from "react";
+import { type Props, Rnd } from "react-rnd";
+import { useProcess, useProcessesActions } from "contexts/process";
+import { FOCUSABLE_ELEMENT, PREVENT_SCROLL } from "utils/constants";
+import { haltEvent } from "utils/functions";
+
+type RndWindowProps = {
+  id: string;
+  rndProps: Props;
+  zIndex: number;
+};
+
+const reRouteFocus =
+  (focusElement?: HTMLElement) =>
+  (element?: Element): void => {
+    element?.setAttribute("tabindex", FOCUSABLE_ELEMENT.tabIndex.toString());
+    element?.setAttribute("aria-hidden", "true");
+    element?.addEventListener("contextmenu", haltEvent);
+    element?.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      focusElement?.focus(PREVENT_SCROLL);
+    });
+  };
+
+const RndWindow: FC<RndWindowProps> = ({ children, id, rndProps, zIndex }) => {
+  const { linkElement } = useProcessesActions();
+  const { Component, componentWindow, maximized, minimized } = useProcess(id);
+  const rndRef = useRef<null | Rnd>(null);
+  const style: React.CSSProperties = {
+    pointerEvents: minimized ? "none" : undefined,
+    zIndex,
+  };
+  const linkComponentWindow = (rndEntry: Rnd): void => {
+    rndRef.current = rndEntry;
+
+    const rndWindowElements =
+      rndEntry?.resizableElement?.current?.children || [];
+    const [windowContainer] = rndWindowElements as HTMLElement[];
+
+    if (Component && !componentWindow && windowContainer) {
+      linkElement(id, "componentWindow", windowContainer);
+    }
+  };
+
+  useEffect(() => {
+    if (!maximized) {
+      const { current: currentWindow } = rndRef;
+      const rndWindowElements =
+        currentWindow?.resizableElement?.current?.children || [];
+      const [windowContainer, resizeHandleContainer] =
+        rndWindowElements as HTMLElement[];
+      const resizeHandles = [...(resizeHandleContainer?.children || [])];
+
+      resizeHandles.forEach(reRouteFocus(windowContainer));
+    }
+  }, [maximized]);
+
+  return (
+    <Rnd ref={linkComponentWindow} style={style} {...rndProps}>
+      {children}
+    </Rnd>
+  );
+};
+
+export default RndWindow;

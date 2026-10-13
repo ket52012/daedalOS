@@ -1,0 +1,191 @@
+import { useRef } from "react";
+import rndDefaults from "components/system/Window/RndWindow/rndDefaults";
+import StyledTitlebar from "components/system/Window/Titlebar/StyledTitlebar";
+import useTitlebarContextMenu from "components/system/Window/Titlebar/useTitlebarContextMenu";
+import useWindowActions from "components/system/Window/Titlebar/useWindowActions";
+import {
+  CloseIcon,
+  MaximizedIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+} from "components/system/Window/Titlebar/WindowActionIcons";
+import { menuIsOpen, useMenuActions } from "contexts/menu";
+import { type MenuState } from "contexts/menu/useMenuContextState";
+import { useProcess } from "contexts/process";
+import { useForegroundId, useSessionActions } from "contexts/session";
+import useDoubleClick from "hooks/useDoubleClick";
+import Button from "styles/common/Button";
+import Icon from "styles/common/Icon";
+import {
+  FOCUSABLE_ELEMENT,
+  LONG_PRESS_DELAY_MS,
+  PREVENT_SCROLL,
+} from "utils/constants";
+import { haltEvent, label } from "utils/functions";
+
+type TitlebarProps = {
+  id: string;
+};
+
+const Titlebar: FC<TitlebarProps> = ({ id }) => {
+  const {
+    allowResizing = true,
+    closing,
+    componentWindow,
+    hideMaximizeButton,
+    hideMinimizeButton,
+    hideTitlebarIcon,
+    icon,
+    maximized,
+    title,
+  } = useProcess(id);
+  const { setForegroundId } = useSessionActions();
+  const foregroundId = useForegroundId();
+  const isForeground = id === foregroundId;
+  const { onClose, onMaximize, onMinimize } = useWindowActions(id);
+  const { setMenu } = useMenuActions();
+  const resetMenu = (): void => setMenu(Object.create(null) as MenuState);
+  const menuIsOpenRef = useRef<boolean>(false);
+  const clickCloseCallback = (): void => {
+    if (menuIsOpenRef.current) resetMenu();
+    onClose();
+  };
+  const onClickClose = useDoubleClick(clickCloseCallback);
+  const onClickMaximize = useDoubleClick(onMaximize);
+  const titlebarContextMenu = useTitlebarContextMenu(id);
+  const touchStartTimeRef = useRef<number>(0);
+  const touchStartPositionRef = useRef<DOMRect>(undefined);
+  const touchesRef = useRef<TouchList>(undefined);
+  const onTouchEnd: React.TouchEventHandler<HTMLButtonElement> = (event) => {
+    const { x, y } = componentWindow?.getBoundingClientRect() || {};
+
+    if (
+      Date.now() - touchStartTimeRef.current >= LONG_PRESS_DELAY_MS &&
+      touchStartPositionRef.current &&
+      touchStartPositionRef.current.x === x &&
+      touchStartPositionRef.current.y === y
+    ) {
+      titlebarContextMenu.onContextMenuCapture(
+        Object.assign(event, {
+          touches: touchesRef.current,
+        })
+      );
+    }
+  };
+  const onTouchStart: React.TouchEventHandler<HTMLButtonElement> = ({
+    touches,
+  }) => {
+    if (componentWindow) {
+      componentWindow.blur();
+      componentWindow.focus(PREVENT_SCROLL);
+      touchStartTimeRef.current = Date.now();
+      touchStartPositionRef.current = componentWindow.getBoundingClientRect();
+      touchesRef.current = touches as unknown as TouchList;
+    }
+  };
+  const onMouseDownCapture: React.MouseEventHandler<HTMLButtonElement> = ({
+    button,
+  }) => {
+    if (button === 0 && menuIsOpen()) resetMenu();
+  };
+  const onMouseUpCapture: React.MouseEventHandler<HTMLButtonElement> = () => {
+    if (componentWindow && componentWindow !== document.activeElement) {
+      setForegroundId(id);
+      componentWindow?.focus(PREVENT_SCROLL);
+    }
+  };
+  const onIconClick: React.MouseEventHandler<HTMLImageElement> = (event) => {
+    if (menuIsOpenRef.current) resetMenu();
+    else titlebarContextMenu.onContextMenuCapture(event);
+
+    menuIsOpenRef.current = !menuIsOpenRef.current;
+
+    onClickClose.onClick(event);
+  };
+  const triggerMinimize = (): void => onMinimize();
+  const onIconMouseDownCapture: React.MouseEventHandler<
+    HTMLImageElement
+  > = () => {
+    menuIsOpenRef.current = menuIsOpen();
+  };
+
+  return (
+    <StyledTitlebar
+      $foreground={isForeground}
+      className={rndDefaults.dragHandleClassName}
+      onDragOver={haltEvent}
+      onDrop={haltEvent}
+      {...titlebarContextMenu}
+    >
+      <Button
+        aria-label={title}
+        {...FOCUSABLE_ELEMENT}
+        {...(!hideMaximizeButton && allowResizing && !closing
+          ? onClickMaximize
+          : {})}
+        onMouseDownCapture={onMouseDownCapture}
+        onMouseUpCapture={onMouseUpCapture}
+        onTouchEndCapture={onTouchEnd}
+        onTouchStartCapture={onTouchStart}
+      >
+        <figure>
+          {!hideTitlebarIcon && (
+            <Icon
+              alt=""
+              imgSize={16}
+              onClick={onIconClick}
+              onMouseDownCapture={onIconMouseDownCapture}
+              src={icon}
+            />
+          )}
+          <figcaption>{title}</figcaption>
+        </figure>
+      </Button>
+      {/* Shortcuts act on the window in front, so only it advertises them */}
+      <nav className="cancel" role="presentation">
+        {!hideMinimizeButton && (
+          <Button
+            aria-keyshortcuts={
+              isForeground && !maximized ? "Control+Shift+ArrowDown" : undefined
+            }
+            className="minimize"
+            onClick={triggerMinimize}
+            {...label("最小化")}
+          >
+            <MinimizeIcon />
+          </Button>
+        )}
+        {!hideMaximizeButton && (
+          <Button
+            aria-keyshortcuts={
+              isForeground && allowResizing
+                ? maximized
+                  ? "Control+Shift+ArrowDown"
+                  : "Control+Shift+ArrowUp"
+                : undefined
+            }
+            className="maximize"
+            disabled={!allowResizing}
+            onClick={onMaximize}
+            {...(maximized
+              ? label("还原", "还原")
+              : label("最大化"))}
+          >
+            {maximized ? <MaximizedIcon /> : <MaximizeIcon />}
+          </Button>
+        )}
+        <Button
+          $short={hideMaximizeButton && hideMinimizeButton}
+          aria-keyshortcuts={isForeground ? "Control+Alt+F4" : undefined}
+          className="close"
+          onClick={onClose}
+          {...label("关闭")}
+        >
+          <CloseIcon />
+        </Button>
+      </nav>
+    </StyledTitlebar>
+  );
+};
+
+export default Titlebar;
