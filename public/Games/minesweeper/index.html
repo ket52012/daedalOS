@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>扫雷</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#2b2f36;font-family:"PingFang SC","Microsoft YaHei",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:16px;color:#e8e8e8;user-select:none}
+h1{font-size:30px;margin:10px 0}
+.bar{display:flex;gap:12px;margin:10px 0;align-items:center;font-size:16px}
+.bar .pill{background:#3a3f47;border-radius:8px;padding:6px 14px}
+button{background:#4caf50;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:15px;cursor:pointer}
+button:active{filter:brightness(.9)}
+.diff{display:flex;gap:8px;margin-bottom:6px}
+.diff button{background:#3a3f47;font-size:13px;padding:6px 14px}
+.diff button.on{background:#2196f3}
+#board{display:grid;gap:2px;background:#1c1f24;padding:8px;border-radius:10px;touch-action:manipulation}
+.c{width:30px;height:30px;background:#4a5058;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;cursor:pointer}
+.c.open{background:#26292f;cursor:default}
+.c.flag{background:#4a5058}
+.c.boom{background:#e53935}
+.hint{margin-top:12px;font-size:13px;color:#9aa0a8;text-align:center;line-height:1.8}
+.n1{color:#4fc3f7}.n2{color:#81c784}.n3{color:#e57373}.n4{color:#ba68c8}.n5{color:#ffb74d}.n6{color:#4db6ac}.n7{color:#fff}.n8{color:#90a4ae}
+</style>
+</head>
+<body>
+<h1>💣 扫雷</h1>
+<div class="diff">
+<button data-d="0" class="on">初级 9×9</button>
+<button data-d="1">中级 16×16</button>
+<button data-d="2">高级 16×30</button>
+</div>
+<div class="bar">
+<div class="pill">💣 <b id="mc">10</b></div>
+<div class="pill">⏱ <b id="tm">0</b></div>
+<button onclick="init()">🔄 重开</button>
+</div>
+<div id="board"></div>
+<div class="hint">左键翻开 · 右键/长按插旗<br>数字 = 周围 8 格的地雷数</div>
+<script>
+const CFG=[[9,9,10],[16,16,40],[16,30,99]];
+let W,H,M,grid,open,flags,over,started,timer,t=0,longT;
+const bd=document.getElementById('board');
+document.querySelectorAll('.diff button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.diff button').forEach(x=>x.classList.remove('on'));b.classList.add('on');init(+b.dataset.d)});
+function init(d){const c=CFG[d??+document.querySelector('.diff .on').dataset.d];W=c[0];H=c[1];M=c[2];grid=[];open=0;flags=0;over=false;started=false;t=0;clearInterval(timer);document.getElementById('tm').textContent='0';document.getElementById('mc').textContent=M;bd.style.gridTemplateColumns=`repeat(${W},30px)`;bd.innerHTML='';for(let y=0;y<H;y++){grid[y]=[];for(let x=0;x<W;x++){grid[y][x]={m:false,n:0,o:false,f:false};const d2=document.createElement('div');d2.className='c';d2.dataset.x=x;d2.dataset.y=y;d2.oncontextmenu=e=>{e.preventDefault();flag(x,y)};d2.onclick=()=>reveal(x,y);d2.addEventListener('touchstart',()=>{longT=setTimeout(()=>flag(x,y),450)},{passive:true});d2.addEventListener('touchend',()=>clearTimeout(longT));bd.appendChild(d2)}}}
+function place(sx,sy){let p=0;while(p<M){const x=Math.random()*W|0,y=Math.random()*H|0;if(grid[y][x].m||(Math.abs(x-sx)<=1&&Math.abs(y-sy)<=1))continue;grid[y][x].m=true;p++}for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(grid[y][x].m)continue;let n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const nx=x+dx,ny=y+dy;if(nx>=0&&nx<W&&ny>=0&&ny<H&&grid[ny][nx].m)n++}grid[y][x].n=n}}
+function cell(x,y){return bd.children[y*W+x]}
+function reveal(x,y){if(over)return;const c=grid[y][x];if(c.o||c.f)return;if(!started){started=true;place(x,y);timer=setInterval(()=>{t++;document.getElementById('tm').textContent=t},1000)}if(c.m){over=true;clearInterval(timer);cell(x,y).classList.add('boom');cell(x,y).textContent='💥';for(let yy=0;yy<H;yy++)for(let xx=0;xx<W;xx++)if(grid[yy][xx].m&&!grid[yy][xx].f){cell(xx,yy).textContent='💣'}setTimeout(()=>alert(`💥 踩雷了！用时 ${t} 秒`),100);return}flip(x,y);if(open===W*H-M){over=true;clearInterval(timer);setTimeout(()=>alert(`🎉 胜利！用时 ${t} 秒`),100)}}
+function flip(x,y){if(x<0||x>=W||y<0||y>=H)return;const c=grid[y][x];if(c.o||c.f)return;c.o=true;open++;const el=cell(x,y);el.classList.add('open');if(c.n)el.innerHTML=`<span class="n${c.n}">${c.n}</span>`;else for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)flip(x+dx,y+dy)}
+function flag(x,y){if(over||!started&&false)return;const c=grid[y][x];if(c.o)return;c.f=!c.f;flags+=c.f?1:-1;const el=cell(x,y);el.textContent=c.f?'🚩':'';el.classList.toggle('flag',c.f);document.getElementById('mc').textContent=M-flags}
+init(0);
+</script>
+</body>
+</html>
