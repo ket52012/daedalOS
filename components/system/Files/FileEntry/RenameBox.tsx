@@ -1,0 +1,93 @@
+import { extname } from "path";
+import { useLayoutEffect, useRef } from "react";
+import { useTheme } from "styled-components";
+import { measureText } from "components/system/Files/FileEntry/functions";
+import StyledRenameBox from "components/system/Files/FileEntry/StyledRenameBox";
+import { type FileManagerViewNames } from "components/system/Files/Views";
+import { PREVENT_SCROLL } from "utils/constants";
+import { haltEvent } from "utils/functions";
+import { isComposingKey } from "utils/keyboard";
+
+type RenameBoxProps = {
+  isDesktop?: boolean;
+  name: string;
+  path: string;
+  renameFile: (path: string, name?: string) => void;
+  setRenaming: React.Dispatch<React.SetStateAction<string>>;
+  view: FileManagerViewNames;
+};
+
+const TEXT_HEIGHT_PADDING = 2;
+const TEXT_WIDTH_PADDING = 22;
+
+const RenameBox: FC<RenameBoxProps> = ({
+  isDesktop,
+  name,
+  path,
+  renameFile,
+  setRenaming,
+  view,
+}) => {
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const saveRename = (): void => renameFile(path, inputRef.current?.value);
+  const { formats, sizes } = useTheme();
+  const isDetails = view === "details";
+  const updateDimensions = (
+    textArea: EventTarget | HTMLTextAreaElement | null
+  ): void => {
+    if (textArea instanceof HTMLTextAreaElement) {
+      const width = measureText(
+        textArea.value,
+        sizes.fileEntry.fontSize,
+        formats.systemFont
+      );
+
+      // Force height to re-calculate
+      if (!isDetails) textArea.setAttribute("style", "height: 1px");
+
+      const newWidth = `width: ${width + TEXT_WIDTH_PADDING}px`;
+      const newHeight = `height: ${textArea.scrollHeight + TEXT_HEIGHT_PADDING}px`;
+
+      textArea.setAttribute(
+        "style",
+        isDetails ? newWidth : `${newHeight}; ${newWidth}`
+      );
+    }
+  };
+
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => updateDimensions(inputRef.current));
+  }, [updateDimensions]);
+
+  useLayoutEffect(() => {
+    updateDimensions(inputRef.current);
+    inputRef.current?.focus(PREVENT_SCROLL);
+    inputRef.current?.setSelectionRange(0, name.length - extname(name).length);
+  }, [name, updateDimensions]);
+
+  return (
+    <StyledRenameBox
+      ref={inputRef}
+      $darkMode={!isDesktop}
+      $singleLineMode={isDetails}
+      defaultValue={name}
+      onBlurCapture={saveRename}
+      onClick={haltEvent}
+      onDragStart={haltEvent}
+      onKeyDown={(event) => {
+        if (isComposingKey(event.nativeEvent)) return;
+        if (event.key === "Enter") saveRename();
+        else if (event.key === "Escape") {
+          event.preventDefault();
+          setRenaming("");
+        }
+      }}
+      onKeyUp={(event) => {
+        updateDimensions(event.target);
+        haltEvent(event);
+      }}
+    />
+  );
+};
+
+export default RenameBox;

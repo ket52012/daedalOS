@@ -1,0 +1,86 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  getInfoWithExtension,
+  getInfoWithoutExtension,
+} from "components/system/Files/FileEntry/functions";
+import { useFs, useRootFs } from "contexts/fileSystem";
+import { isMountedFolder } from "contexts/fileSystem/core";
+import { MOUNTABLE_EXTENSIONS } from "utils/constants";
+import { getExtension } from "utils/functions";
+
+export type FileInfo = {
+  comment?: string;
+  getIcon?: ((signal: AbortSignal) => Promise<void> | void) | true;
+  icon: string;
+  pid: string;
+  subIcons?: string[];
+  type?: string;
+  url: string;
+};
+
+const INITIAL_FILE_INFO: FileInfo = {
+  icon: "",
+  pid: "",
+  url: "",
+};
+
+const useFileInfo = (
+  path: string,
+  isDirectory = false,
+  hasNewFolderIcon = false,
+  isVisible = true
+): [FileInfo, React.Dispatch<React.SetStateAction<FileInfo>>] => {
+  const [info, setInfo] = useState<FileInfo>(INITIAL_FILE_INFO);
+  const updatingInfo = useRef(false);
+  const updateInfo = (newInfo: FileInfo): void => {
+    setInfo(newInfo);
+    updatingInfo.current = false;
+  };
+  const fs = useFs();
+  const rootFs = useRootFs();
+
+  useEffect(() => {
+    if (
+      fs &&
+      rootFs &&
+      !updatingInfo.current &&
+      isVisible &&
+      info === INITIAL_FILE_INFO
+    ) {
+      updatingInfo.current = true;
+
+      const extension = isDirectory ? "" : getExtension(path);
+
+      if (
+        !extension ||
+        (isDirectory &&
+          !MOUNTABLE_EXTENSIONS.has(extension) &&
+          !isMountedFolder(rootFs.mntMap[path]))
+      ) {
+        getInfoWithoutExtension(
+          fs,
+          rootFs,
+          path,
+          isDirectory,
+          hasNewFolderIcon,
+          updateInfo
+        );
+      } else {
+        getInfoWithExtension(fs, path, extension, updateInfo);
+      }
+    }
+  }, [
+    fs,
+    hasNewFolderIcon,
+    info,
+    isDirectory,
+    isVisible,
+    path,
+    rootFs,
+    updateInfo,
+  ]);
+
+  return [info, setInfo];
+};
+
+export default useFileInfo;
