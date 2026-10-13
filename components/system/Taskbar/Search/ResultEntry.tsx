@@ -1,0 +1,216 @@
+import { basename } from "path";
+import type Stats from "browserfs/dist/node/core/node_fs_stats";
+// eslint-disable-next-line no-restricted-imports -- ResultSection re-maps every result whenever the results update
+import { memo, useEffect, useRef, useState } from "react";
+import {
+  getModifiedTime,
+  getShortcutInfo,
+} from "components/system/Files/FileEntry/functions";
+import SubIcons from "components/system/Files/FileEntry/SubIcons";
+import { UNKNOWN_ICON } from "components/system/Files/FileManager/icons";
+import {
+  fileType,
+  getResultInfo,
+  type ResultInfo,
+} from "components/system/Taskbar/Search/functions";
+import { RightArrow } from "components/system/Taskbar/Search/Icons";
+import useResultsContextMenu from "components/system/Taskbar/Search/useResultsContextMenu";
+import { useFileSystemActions, useFs } from "contexts/fileSystem";
+import { type ProcessArguments } from "contexts/process/types";
+import { useSessionActions } from "contexts/session";
+import { useIsVisible } from "hooks/useIsVisible";
+import Icon from "styles/common/Icon";
+import { DEFAULT_LOCALE, SHORTCUT_EXTENSION } from "utils/constants";
+import { getExtension, isYouTubeUrl, label } from "utils/functions";
+
+type ResultEntryProps = {
+  active?: boolean;
+  details?: boolean;
+  openApp: (pid: string, args?: ProcessArguments) => void;
+  searchTerm: string;
+  setActiveItem: React.Dispatch<React.SetStateAction<string>>;
+  url: string;
+};
+
+const INITIAL_INFO = {
+  icon: UNKNOWN_ICON,
+} as ResultInfo;
+
+const highlightSearchTerm = (text: string, searchTerm: string): string => {
+  try {
+    return text.replace(new RegExp(`(${searchTerm})`, "i"), "<span>$1</span>");
+  } catch {
+    // Ignore failure to wrap search text
+    return text;
+  }
+};
+
+const ResultEntry: FC<ResultEntryProps> = ({
+  active,
+  details,
+  openApp,
+  searchTerm,
+  setActiveItem,
+  url,
+}) => {
+  const { readFile, stat } = useFileSystemActions();
+  const fs = useFs();
+  const { updateRecentFiles } = useSessionActions();
+  const [stats, setStats] = useState<Stats>();
+  const [info, setInfo] = useState<ResultInfo>(INITIAL_INFO);
+  const [hovered, setHovered] = useState(false);
+  const elementRef = useRef<HTMLLIElement | null>(null);
+  const isVisible = useIsVisible(elementRef, ".list");
+  const { onContextMenuCapture } = useResultsContextMenu(info?.url);
+  const abortController = useRef<AbortController>(undefined);
+
+  useEffect(() => {
+    const activeEntry = details || hovered;
+
+    if (!stats && activeEntry) stat(url).then(setStats);
+    if (abortController.current) {
+      if (!isVisible) {
+        abortController.current.abort();
+        abortController.current = undefined;
+      }
+    } else if ((activeEntry || isVisible) && info === INITIAL_INFO) {
+      abortController.current = new AbortController();
+
+      getResultInfo(fs, url, abortController.current.signal).then(
+        (resultsInfo) => {
+          if (resultsInfo) setInfo(resultsInfo);
+          abortController.current = undefined;
+        }
+      );
+    }
+  }, [details, fs, hovered, info, isVisible, stat, stats, url]);
+
+  useEffect(
+    () => () => {
+      const { current: controller } = abortController;
+
+      if (!controller) return;
+
+      try {
+        controller.abort();
+      } catch {
+        // Failed to abort getResultInfo
+      }
+    },
+    []
+  );
+
+  const extension = getExtension(info?.url || url);
+  const baseName = basename(url, SHORTCUT_EXTENSION);
+  const name = highlightSearchTerm(baseName, searchTerm);
+  const isYTUrl = info?.url ? isYouTubeUrl(info.url) : false;
+  const baseUrl = isYTUrl ? url : url || info?.url;
+  const lastModified =
+    stats && !stats.isDirectory()
+      ? `Last modified: ${new Date(
+          getModifiedTime(baseUrl, stats)
+        ).toLocaleString(DEFAULT_LOCALE, {
+          dateStyle: "short",
+          timeStyle: "short",
+        })}`
+      : "";
+  const isAppShortcut = info?.pid
+    ? url === info.url && getExtension(url) === SHORTCUT_EXTENSION
+    : false;
+  const isDirectory = stats?.isDirectory() || (!extension && !isYTUrl);
+  const isNostrUrl = info?.url ? info.url.startsWith("nostr:") : false;
+  const maybeHovered = (): void => {
+    if (!details) setHovered(true);
+  };
+
+  return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    <li
+      ref={elementRef}
+      className={active ? "active-item" : undefined}
+      onFocus={maybeHovered}
+      onMouseOver={maybeHovered}
+      title={lastModified ? `${baseUrl}\n\n${lastModified}` : baseUrl}
+    >
+      <button
+        aria-label={baseName}
+        onClick={async () => {
+          openApp(
+            info?.pid,
+            isAppShortcut
+              ? undefined
+              : {
+                  url:
+                    getExtension(baseUrl) === SHORTCUT_EXTENSION
+                      ? getShortcutInfo(await readFile(baseUrl))?.url || baseUrl
+                      : baseUrl,
+                }
+          );
+          if (baseUrl && info?.pid) updateRecentFiles(baseUrl, info?.pid);
+        }}
+        onContextMenuCapture={
+          !isYTUrl && !isNostrUrl && !isAppShortcut && !isDirectory
+            ? onContextMenuCapture
+            : undefined
+        }
+        type="button"
+      >
+        <figure className={details ? undefined : "simple"}>
+          <Icon
+            displaySize={details ? 32 : 16}
+            imgSize={details ? 32 : 16}
+            src={info?.icon}
+          />
+          <SubIcons
+            alt=""
+            icon={info?.icon}
+            imgSize={details ? 32 : 16}
+            showShortcutIcon={false}
+            subIcons={info?.subIcons}
+            view="icon"
+          />
+          <figcaption>
+            <h1
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{
+                __html: name,
+              }}
+              role="none"
+            />
+            {details && stats && (
+              <>
+                <h2 role="none">
+                  {fileType(
+                    stats,
+                    extension,
+                    isYTUrl,
+                    isAppShortcut,
+                    isNostrUrl
+                  )}
+                </h2>
+                {!isYTUrl && !isAppShortcut && !isDirectory && (
+                  <h2 role="none">{lastModified}</h2>
+                )}
+              </>
+            )}
+          </figcaption>
+        </figure>
+      </button>
+      {!active && (
+        <button
+          className="select"
+          onClick={() => setActiveItem(url)}
+          type="button"
+          {...label(
+            "See more information",
+            `See more information about ${baseName}`
+          )}
+        >
+          <RightArrow />
+        </button>
+      )}
+    </li>
+  );
+};
+
+export default memo(ResultEntry);

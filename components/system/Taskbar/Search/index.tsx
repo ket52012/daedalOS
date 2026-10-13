@@ -1,0 +1,621 @@
+import { basename, extname } from "path";
+import { m as motion } from "motion/react";
+import dynamic from "next/dynamic";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTheme } from "styled-components";
+import { Search as SearchIcon } from "components/apps/FileExplorer/NavigationIcons";
+import {
+  getCachedShortcut,
+  getProcessByFileExtension,
+  getShortcutInfo,
+  isExistingFile,
+} from "components/system/Files/FileEntry/functions";
+import {
+  Documents,
+  Pictures,
+  Videos,
+} from "components/system/StartMenu/Sidebar/SidebarIcons";
+import {
+  maybeCloseTaskbarMenu,
+  SEARCH_BUTTON_TITLE,
+} from "components/system/Taskbar/functions";
+import { Games } from "components/system/Taskbar/Search/Icons";
+import StyledFiles from "components/system/Taskbar/Search/StyledFiles";
+import StyledResults from "components/system/Taskbar/Search/StyledResults";
+import StyledSearch from "components/system/Taskbar/Search/StyledSearch";
+import StyledSections from "components/system/Taskbar/Search/StyledSections";
+import StyledSuggestions from "components/system/Taskbar/Search/StyledSuggestions";
+import StyledTabs from "components/system/Taskbar/Search/StyledTabs";
+import useSearchInputTransition from "components/system/Taskbar/Search/useSearchInputTransition";
+import useTaskbarItemTransition from "components/system/Taskbar/useTaskbarItemTransition";
+import { CloseIcon } from "components/system/Window/Titlebar/WindowActionIcons";
+import { useFileSystemActions } from "contexts/fileSystem";
+import { useProcessesActions } from "contexts/process";
+import directory from "contexts/process/directory";
+import { type ProcessArguments } from "contexts/process/types";
+import { useRecentFiles, useSessionActions } from "contexts/session";
+import Button from "styles/common/Button";
+import Icon from "styles/common/Icon";
+import {
+  FOCUSABLE_ELEMENT,
+  KEYPRESS_DEBOUNCE_MS,
+  MILLISECONDS_IN_SECOND,
+  PICTURES_FOLDER,
+  PREVENT_SCROLL,
+  SHORTCUT_EXTENSION,
+  TRANSITIONS_IN_SECONDS,
+  VIDEOS_FOLDER,
+} from "utils/constants";
+import { getExtension, haltEvent, label, preloadLibs } from "utils/functions";
+import {
+  focusByKey,
+  isComposingKey,
+  isKeyboardNavigating,
+  isPrintableKey,
+  isVisibleElement,
+  restoreFocus,
+} from "utils/keyboard";
+import {
+  FILE_INDEX,
+  SEARCH_INPUT_PROPS,
+  SEARCH_LIB,
+  useSearch,
+} from "utils/search";
+
+type SearchProps = {
+  toggleSearch: (showMenu?: boolean) => void;
+};
+
+const TABS = ["All", "Documents", "Photos", "Videos"] as const;
+
+const MIN_MULTI_LINE = 550;
+
+export const SINGLE_LINE_HEIGHT_ADDITION = 34;
+
+export type TabName = (typeof TABS)[number];
+
+type TabData = {
+  icon: React.JSX.Element;
+  subtitle?: string;
+  title: string;
+};
+
+export const NO_RESULTS = "NO_RESULTS";
+
+const SUGGESTED = ["FileExplorer", "Terminal", "Browser", "Paint", "VideoPlayer"];
+
+const GAMES = ["SpaceCadet", "DXBall"];
+
+const METADATA = {
+  Documents: {
+    icon: <Documents />,
+    subtitle: "for documents",
+    title: "Documents",
+  },
+  Photos: {
+    icon: <Pictures />,
+    title: "Photos",
+  },
+  Videos: {
+    icon: <Videos />,
+    title: "Videos",
+  },
+} as Record<TabName, TabData>;
+
+const Details = dynamic(
+  () => import("components/system/Taskbar/Search/Details")
+);
+const ResultSection = dynamic(
+  () => import("components/system/Taskbar/Search/ResultSection")
+);
+
+const getResultButtons = (menu: HTMLElement | null): HTMLElement[] =>
+  [
+    ...(menu?.querySelectorAll<HTMLElement>(
+      ".content .list li > button:not(.select), .content section li > button"
+    ) || []),
+  ].filter(isVisibleElement);
+
+const Search: FC<SearchProps> = ({ toggleSearch }) => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const menuRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef<Element | null>(null);
+  const closingRef = useRef(false);
+  const { updateRecentFiles } = useSessionActions();
+  const recentFiles = useRecentFiles();
+  const { lstat, readFile } = useFileSystemActions();
+  const [activeTab, setActiveTab] = useState<TabName>("All");
+  const {
+    sizes: { search },
+  } = useTheme();
+  const [menuWidth, setMenuWidth] = useState(MIN_MULTI_LINE);
+  const singleLineView = menuWidth < MIN_MULTI_LINE;
+  const searchTransition = useTaskbarItemTransition(
+    search.maxHeight + (singleLineView ? SINGLE_LINE_HEIGHT_ADDITION : 0),
+    true,
+    0.1,
+    0
+  );
+  const inputTransition = useSearchInputTransition();
+  const [showCaret, setShowCaret] = useState(false);
+
+  // Before motion starts the slide-in, as focusing forces a layout
+  useLayoutEffect(() => {
+    if (!menuRef.current?.contains(document.activeElement)) {
+      returnFocusRef.current = document.activeElement;
+    }
+    inputRef.current?.focus(PREVENT_SCROLL);
+    setTimeout(() => setShowCaret(true), 400);
+  }, []);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const results = useSearch(searchTerm);
+  const [bestMatch, setBestMatch] = useState("");
+  const [activeItem, setActiveItem] = useState("");
+  const { open } = useProcessesActions();
+  const [subResults, setSubResults] = useState<[string, lunr.Index.Result[]][]>(
+    []
+  );
+
+  if (results.length === 0 && subResults.length > 0) setSubResults([]);
+
+  const [resultsStatus, setResultsStatus] = useState("");
+  const resultsStatusTimeoutRef = useRef(0);
+  const tabResults =
+    activeTab === "All"
+      ? results
+      : Object.fromEntries(subResults)[activeTab] || [];
+  const shownResults = tabResults.length;
+
+  useEffect(() => {
+    // Waits for typing & results to settle so only the final count is told
+    resultsStatusTimeoutRef.current = window.setTimeout(
+      () =>
+        setResultsStatus(
+          searchTerm
+            ? shownResults > 0
+              ? `${shownResults} result${shownResults === 1 ? "" : "s"}`
+              : `No results found for '${searchTerm}'`
+            : ""
+        ),
+      MILLISECONDS_IN_SECOND / 2
+    );
+
+    return () => window.clearTimeout(resultsStatusTimeoutRef.current);
+  }, [searchTerm, shownResults]);
+
+  const firstResult = tabResults[0];
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const openApp = (pid: string, args?: ProcessArguments): void => {
+    toggleSearch(false);
+    open(pid, args);
+  };
+  const searchTimeoutRef = useRef(0);
+  const preloadedSearch = useRef(false);
+  const preloadSearch = (): void => {
+    if (!preloadedSearch.current) {
+      preloadedSearch.current = true;
+      preloadLibs([SEARCH_LIB, FILE_INDEX]);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      firstResult?.ref &&
+      (!bestMatch || bestMatch !== firstResult?.ref || !activeItem)
+    ) {
+      // eslint-disable-next-line react/set-state-in-effect -- Picks the best match after measuring the menu width
+      setBestMatch(firstResult.ref);
+
+      if (menuRef.current && menuRef.current.clientWidth > MIN_MULTI_LINE) {
+        setActiveItem(firstResult.ref);
+      }
+    } else if (!firstResult && activeItem) {
+      setActiveItem("");
+    }
+  }, [activeItem, bestMatch, firstResult]);
+
+  useEffect(() => {
+    // The select/back buttons and stale results unmount while focused,
+    // dropping focus to body, which would leave Escape and blur-close inoperable
+    if (document.activeElement === document.body) {
+      menuRef.current?.focus(PREVENT_SCROLL);
+    }
+    // eslint-disable-next-line react/exhaustive-effect-dependencies
+  }, [activeItem, results]);
+
+  useEffect(() => {
+    const updateMenuWidth = (): void =>
+      setMenuWidth(menuRef.current?.clientWidth || 0);
+
+    updateMenuWidth();
+
+    window.addEventListener("resize", updateMenuWidth);
+
+    return () => window.removeEventListener("resize", updateMenuWidth);
+  }, []);
+
+  useEffect(() => {
+    if (results.length === 0) return;
+
+    Promise.all(
+      results.map(async (result) => {
+        const extension = getExtension(result.ref);
+        let pid = "";
+
+        if (extension === SHORTCUT_EXTENSION) {
+          if (result.ref.startsWith(`${PICTURES_FOLDER}/`)) pid = "Photos";
+          else if (result.ref.startsWith(`${VIDEOS_FOLDER}/`)) {
+            pid = "VideoPlayer";
+          } else {
+            ({ pid } = isExistingFile(await lstat(result.ref))
+              ? getCachedShortcut(result.ref)
+              : getShortcutInfo(await readFile(result.ref)));
+          }
+        } else pid = getProcessByFileExtension(extension);
+
+        return { pid, result };
+      })
+    ).then((enriched) => {
+      const newResults = {
+        Documents: [] as lunr.Index.Result[],
+        Photos: [] as lunr.Index.Result[],
+        Videos: [] as lunr.Index.Result[],
+      };
+
+      for (const { pid, result } of enriched) {
+        if (pid === "Photos") newResults.Photos.push(result);
+        else if (pid === "VideoPlayer") newResults.Videos.push(result);
+        else newResults.Documents.push(result);
+      }
+
+      setSubResults(Object.entries(newResults));
+    });
+  }, [lstat, readFile, results]);
+
+  const changeTab = (tab: TabName): void => {
+    if (inputRef.current) {
+      inputRef.current.value = (
+        tab === "All"
+          ? inputRef.current.value
+          : `${tab}: ${inputRef.current.value}`
+      ).replace(`${activeTab}: `, "");
+      listRef.current?.scrollTo(0, 0);
+    }
+
+    setActiveItem("");
+    setActiveTab(tab);
+  };
+  const closeSearch = (returnFocus = true): void => {
+    closingRef.current = true;
+    toggleSearch(false);
+    if (returnFocus) restoreFocus(returnFocusRef.current, menuRef.current);
+    closingRef.current = false;
+  };
+  const onKeyDown: React.KeyboardEventHandler<HTMLElement> = (event) => {
+    const { ctrlKey, key, shiftKey, target } = event;
+
+    if (isComposingKey(event.nativeEvent)) return;
+
+    // Its own shortcut closes it too, the same as Escape
+    if (
+      key === "Escape" ||
+      (ctrlKey && shiftKey && key.toUpperCase() === "S")
+    ) {
+      haltEvent(event);
+      closeSearch();
+      return;
+    }
+
+    // From the box, only Down needs the results, so typing skips finding them
+    const resultButtons =
+      target === inputRef.current && key !== "ArrowDown"
+        ? []
+        : getResultButtons(menuRef.current);
+    const resultIndex = resultButtons.indexOf(target as HTMLElement);
+
+    if (
+      (target === inputRef.current || target === menuRef.current) &&
+      key === "ArrowDown" &&
+      focusByKey(key, resultButtons)
+    ) {
+      haltEvent(event);
+    } else if (
+      resultIndex === 0 &&
+      (key === "ArrowUp" || key === "ArrowLeft")
+    ) {
+      haltEvent(event);
+      inputRef.current?.focus(PREVENT_SCROLL);
+    } else if (
+      resultIndex !== -1 &&
+      focusByKey(key, resultButtons, { wrap: false })
+    ) {
+      haltEvent(event);
+    } else if (
+      isKeyboardNavigating() &&
+      target !== inputRef.current &&
+      (isPrintableKey(event) || key === "Backspace")
+    ) {
+      // Typing goes back to the search box, as it does in Windows
+      inputRef.current?.focus(PREVENT_SCROLL);
+    }
+  };
+  const visibleTabs = TABS.filter(
+    (tab) =>
+      !(menuWidth < 325 && tab === "Videos") &&
+      !(menuWidth < 260 && tab === "Photos")
+  );
+  // Narrow menus hide some tabs, so then the panel names itself
+  const labelledBy = visibleTabs.includes(activeTab)
+    ? `search-tab-${activeTab}`
+    : undefined;
+  const tabPanel = {
+    "aria-label": labelledBy ? undefined : activeTab,
+    "aria-labelledby": labelledBy,
+    id: "search-results",
+    role: "tabpanel",
+  };
+  const hasTabPanel = !searchTerm || !singleLineView || !activeItem;
+
+  return (
+    <StyledSearch
+      ref={menuRef}
+      $singleLine={singleLineView}
+      aria-label="搜索"
+      id="searchMenu"
+      onBlurCapture={(event) => {
+        if (!closingRef.current) {
+          maybeCloseTaskbarMenu(
+            event,
+            menuRef.current,
+            toggleSearch,
+            inputRef.current,
+            SEARCH_BUTTON_TITLE,
+            true
+          );
+        }
+      }}
+      onKeyDown={onKeyDown}
+      role="dialog"
+      {...searchTransition}
+      {...FOCUSABLE_ELEMENT}
+    >
+      <div className="results-status" role="status">
+        {resultsStatus}
+      </div>
+      <div>
+        <div className="content" onContextMenu={haltEvent}>
+          <StyledTabs role="tablist">
+            {visibleTabs.map((tab) => (
+              <li
+                key={tab}
+                className={tab === activeTab ? "active" : undefined}
+                role="presentation"
+              >
+                <button
+                  aria-selected={tab === activeTab}
+                  id={`search-tab-${tab}`}
+                  onClick={() => changeTab(tab)}
+                  role="tab"
+                  type="button"
+                  {...(hasTabPanel && { "aria-controls": tabPanel.id })}
+                  {...label(
+                    tab === "All"
+                      ? "Find the most relevant results"
+                      : `Find results in ${tab}`,
+                    tab
+                  )}
+                >
+                  {tab}
+                </button>
+              </li>
+            ))}
+          </StyledTabs>
+          <nav role="presentation">
+            <Button
+              className="close-button"
+              onClick={() => closeSearch(isKeyboardNavigating())}
+              {...label("关闭搜索")}
+            >
+              <CloseIcon />
+            </Button>
+          </nav>
+          {!searchTerm && activeTab === "All" && (
+            <StyledSections
+              $singleLine={singleLineView}
+              className={singleLineView ? "single-line" : undefined}
+              {...tabPanel}
+            >
+              <section>
+                <figure>
+                  <figcaption>Suggested</figcaption>
+                  <StyledSuggestions>
+                    {SUGGESTED.map((app) => (
+                      <li key={app} title={directory[app].title}>
+                        <button
+                          aria-label={directory[app].title}
+                          onClick={() => openApp(app)}
+                          type="button"
+                        >
+                          <figure>
+                            <Icon
+                              alt=""
+                              displaySize={32}
+                              imgSize={32}
+                              src={directory[app].icon}
+                            />
+                            <figcaption>{directory[app].title}</figcaption>
+                          </figure>
+                        </button>
+                      </li>
+                    ))}
+                  </StyledSuggestions>
+                </figure>
+              </section>
+              <section>
+                {recentFiles.length > 0 && (
+                  <StyledFiles>
+                    <figcaption>Recent</figcaption>
+                    <ol>
+                      {recentFiles.map(([file, pid, title], index) => (
+                        <li key={`${file}${pid}`}>
+                          <button
+                            onClick={() => {
+                              openApp(pid, { url: file });
+                              if (index !== 0) {
+                                setTimeout(
+                                  () => updateRecentFiles(file, pid, title),
+                                  TRANSITIONS_IN_SECONDS.TASKBAR_ITEM *
+                                    MILLISECONDS_IN_SECOND
+                                );
+                              }
+                            }}
+                            type="button"
+                          >
+                            <Icon
+                              alt=""
+                              displaySize={16}
+                              imgSize={16}
+                              src={directory[pid]?.icon}
+                            />
+                            <h2 role="none">
+                              {title || basename(file, extname(file))}
+                            </h2>
+                          </button>
+                        </li>
+                      ))}
+                    </ol>
+                  </StyledFiles>
+                )}
+                <figure className="card">
+                  <figcaption>
+                    <Games />
+                    Games for you
+                  </figcaption>
+                  <ol>
+                    {GAMES.filter(
+                      (game) => !(menuWidth < 260 && game === "SpaceCadet")
+                    ).map((game) =>
+                        directory[game] && (
+                          <li key={game} title={directory[game].title}>
+                            <button onClick={() => openApp(game)} type="button">
+                              <Icon
+                                alt=""
+                                displaySize={56}
+                                imgSize={96}
+                                src={directory[game].icon}
+                              />
+                              <h4 role="none">{directory[game].title}</h4>
+                            </button>
+                          </li>
+                        )
+                    )}
+                  </ol>
+                </figure>
+              </section>
+            </StyledSections>
+          )}
+          {!searchTerm && activeTab !== "All" && (
+            <div className="tab" {...tabPanel}>
+              {METADATA[activeTab].icon}
+              <h1>Search {METADATA[activeTab].title.toLowerCase()}</h1>
+              <h3 aria-level={2}>
+                Start typing to search{" "}
+                {METADATA[activeTab].subtitle ||
+                  METADATA[activeTab].title.toLowerCase()}
+              </h3>
+            </div>
+          )}
+          {searchTerm && (
+            <StyledResults>
+              {(!singleLineView || !activeItem) && (
+                <div ref={listRef} className="list" {...tabPanel}>
+                  <ResultSection
+                    activeItem={activeItem}
+                    activeTab={activeTab}
+                    openApp={openApp}
+                    results={[firstResult || { ref: NO_RESULTS }]}
+                    searchTerm={searchTerm}
+                    setActiveItem={setActiveItem}
+                    title={"Best match" as TabName}
+                    details
+                  />
+                  {results.length > 1 &&
+                    subResults.map(
+                      ([title, subResult]) =>
+                        (activeTab === "All" || activeTab === title) && (
+                          <ResultSection
+                            key={title}
+                            activeItem={activeItem}
+                            activeTab={activeTab}
+                            changeTab={changeTab}
+                            openApp={openApp}
+                            results={subResult.filter(
+                              (result) => firstResult !== result
+                            )}
+                            searchTerm={searchTerm}
+                            setActiveItem={setActiveItem}
+                            title={title as TabName}
+                          />
+                        )
+                    )}
+                </div>
+              )}
+              {activeItem && firstResult && (
+                <Details
+                  openApp={openApp}
+                  setActiveItem={setActiveItem}
+                  singleLineView={singleLineView}
+                  url={activeItem || firstResult?.ref}
+                />
+              )}
+            </StyledResults>
+          )}
+        </div>
+        <motion.div className="search" {...inputTransition}>
+          <SearchIcon />
+          <input
+            ref={inputRef}
+            onChange={() => {
+              const tabAppend = activeTab === "All" ? "" : `${activeTab}: `;
+              const value = inputRef.current?.value.startsWith(tabAppend)
+                ? inputRef.current?.value.replace(tabAppend, "")
+                : inputRef.current?.value;
+
+              window.clearTimeout(resultsStatusTimeoutRef.current);
+              window.clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = window.setTimeout(
+                () => setSearchTerm(value ?? ""),
+                searchTimeoutRef.current > 0 ? KEYPRESS_DEBOUNCE_MS : 0
+              );
+            }}
+            onClick={preloadSearch}
+            onKeyDown={({ key, nativeEvent }) => {
+              preloadSearch();
+
+              if (
+                key === "Enter" &&
+                firstResult?.ref &&
+                !isComposingKey(nativeEvent)
+              ) {
+                const bestMatchElement = menuRef.current?.querySelector(
+                  ".list li:first-child > button"
+                );
+
+                (bestMatchElement as HTMLElement)?.click();
+              }
+            }}
+            placeholder="在此搜索"
+            style={{
+              caretColor: showCaret ? undefined : "transparent",
+            }}
+            {...SEARCH_INPUT_PROPS}
+            aria-label="在此搜索"
+          />
+        </motion.div>
+      </div>
+    </StyledSearch>
+  );
+};
+
+export default Search;
