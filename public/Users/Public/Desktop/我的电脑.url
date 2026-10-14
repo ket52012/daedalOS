@@ -1,0 +1,6 @@
+[InternetShortcut]
+BaseURL=FileExplorer
+Comment=显示根文件夹的内容。
+IconFile=/System/Icons/pc.webp
+Type=System
+URL=/
