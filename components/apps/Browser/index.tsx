@@ -390,12 +390,12 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
 
   return (
     <StyledBrowser $hasSrcDoc={Boolean(srcDoc)}>
-      <nav aria-label="Toolbar">
+      <nav aria-label="工具栏">
         <div>
           <Button
             disabled={!canGoBack}
             onClick={() => changeHistory(-1)}
-            {...label("Click to go back", "Back")}
+            {...label("点击后退", "后退")}
             {...backMenu}
           >
             <Arrow direction="left" />
@@ -403,7 +403,7 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
           <Button
             disabled={!canGoForward}
             onClick={() => changeHistory(1)}
-            {...label("Click to go forward", "Forward")}
+            {...label("点击前进", "前进")}
             {...forwardMenu}
           >
             <Arrow direction="right" />
@@ -412,14 +412,14 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
             disabled={loading}
             onClick={() => setUrl(history[position])}
             onContextMenu={haltEvent}
-            {...label("Reload this page", "Reload")}
+            {...label("重新加载此页", "重新加载")}
           >
             {loading ? <Stop /> : <Refresh />}
           </Button>
         </div>
         <input
           ref={inputRef}
-          aria-label="Address and search bar"
+          aria-label="地址和搜索栏"
           defaultValue={initialUrl}
           onFocusCapture={() => inputRef.current?.select()}
           onKeyDown={({ key, nativeEvent }) => {
@@ -451,7 +451,7 @@ const Browser: FC<ComponentProcessProps> = ({ id }) => {
           <Network />
         </Button>
       </nav>
-      <nav aria-label="Bookmarks">
+      <nav aria-label="书签">
         {bookmarks.map(({ icon, name, url: bookmarkUrl }) => (
           <Button
             key={name}

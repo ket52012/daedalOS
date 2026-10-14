@@ -35,7 +35,7 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
     closing || !hasProcess(process)
       ? undefined
       : objectOperation ||
-        (url && !fileReaders ? baseOperation || "Extracting" : "Copying");
+        (url && !fileReaders ? baseOperation || "正在解压" : "正在复制");
   // Keeps the last operation shown while the dialog closes
   const [lastOperation, setLastOperation] = useState(liveOperation);
 
@@ -190,7 +190,7 @@ const Transfer: FC<ComponentProcessProps> = ({ id }) => {
         <progress
           {...(name
             ? { "aria-labelledby": titleId }
-            : { "aria-label": "Transfer progress" })}
+            : { "aria-label": "传输进度" })}
           max={totalTransferSize}
           value={
             totalTransferSize === Number.POSITIVE_INFINITY

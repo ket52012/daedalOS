@@ -1,8 +1,8 @@
 import { PREVENT_SCROLL } from "utils/constants";
 import { isKeyboardInMenu } from "utils/keyboard";
 
-export const START_BUTTON_TITLE = "Start";
-export const SEARCH_BUTTON_TITLE = "Type here to search";
+export const START_BUTTON_TITLE = "开始";
+export const SEARCH_BUTTON_TITLE = "在此处键入以搜索";
 
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 export const importAIButton = () =>

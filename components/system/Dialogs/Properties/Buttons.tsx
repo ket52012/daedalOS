@@ -12,8 +12,8 @@ const Buttons: FC<ButtonsProps> = ({ id, onClick }) => {
 
   return (
     <nav className="buttons" role="presentation">
-      <StyledButton onClick={onClick || close}>OK</StyledButton>
-      <StyledButton onClick={close}>Cancel</StyledButton>
+      <StyledButton onClick={onClick || close}>确定</StyledButton>
+      <StyledButton onClick={close}>取消</StyledButton>
     </nav>
   );
 };

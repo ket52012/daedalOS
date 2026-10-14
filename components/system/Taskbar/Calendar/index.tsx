@@ -93,7 +93,7 @@ const Calendar: FC<CalendarProps> = ({ toggleCalendar }) => {
     calendar && (
       <StyledCalendar
         ref={calendarRef}
-        aria-label="Date and Time Information"
+        aria-label="日期和时间信息"
         id="calendar"
         onContextMenu={haltEvent}
         onKeyDown={(event) => {

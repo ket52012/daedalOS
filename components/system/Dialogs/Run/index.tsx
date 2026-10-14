@@ -290,13 +290,13 @@ const Run: FC<ComponentProcessProps> = ({ id }) => {
           disabled={isEmptyInput || running}
           onClick={() => runResource(inputRef.current?.value.trim())}
         >
-          OK
+          确定
         </StyledButton>
         <StyledButton
           disabled={running}
           onClick={() => closeWithTransition(id)}
         >
-          Cancel
+          取消
         </StyledButton>
       </nav>
     </StyledRun>

@@ -67,7 +67,7 @@ const Paint: FC<ComponentProcessProps> = ({ id }) => {
   const { onDragOver, onDrop } = useFileDrop({ id });
 
   useEffect(() => {
-    prependFileToTitle("Untitled");
+    prependFileToTitle("无标题");
   }, [prependFileToTitle]);
 
   useEffect(() => {
@@ -97,7 +97,7 @@ const Paint: FC<ComponentProcessProps> = ({ id }) => {
       setJsPaintInstance(jsPaint);
 
       jsPaint.file_new = () => {
-        prependFileToTitle("Untitled");
+        prependFileToTitle("无标题");
         previousFileNew();
       };
       jsPaint.systemHooks.setWallpaperTiled = setWallpaperFromCanvas("tile");
@@ -171,7 +171,7 @@ const Paint: FC<ComponentProcessProps> = ({ id }) => {
             error?.reason?.message ===
             "either options.data or options.file or options.filePath must be passed"
           ) {
-            prependFileToTitle("Untitled");
+            prependFileToTitle("无标题");
           }
         };
         jsPaintInstance.open_from_file(

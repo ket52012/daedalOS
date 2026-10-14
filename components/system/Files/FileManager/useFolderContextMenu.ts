@@ -257,7 +257,7 @@ const useFolderContextMenu = (
               top,
             });
           },
-          label: "Scroll Here",
+          label: "滚动到此处",
         },
         MENU_SEPERATOR,
         {
@@ -267,7 +267,7 @@ const useFolderContextMenu = (
               top: 0,
             });
           },
-          label: "Top",
+          label: "顶部",
         },
         {
           action: () => {
@@ -276,7 +276,7 @@ const useFolderContextMenu = (
               top: targetElement.scrollHeight,
             });
           },
-          label: "Bottom",
+          label: "底部",
         },
         MENU_SEPERATOR,
         {
@@ -286,7 +286,7 @@ const useFolderContextMenu = (
               top: -targetElement.clientHeight,
             });
           },
-          label: "Page Up",
+          label: "向上翻页",
         },
         {
           action: () => {
@@ -295,7 +295,7 @@ const useFolderContextMenu = (
               top: targetElement.clientHeight,
             });
           },
-          label: "Page Down",
+          label: "向下翻页",
         },
         MENU_SEPERATOR,
         {
@@ -305,7 +305,7 @@ const useFolderContextMenu = (
               top: -SCROLL_ITERATION_HEIGHT,
             });
           },
-          label: "Scroll Up",
+          label: "向上滚动",
         },
         {
           action: () => {
@@ -314,7 +314,7 @@ const useFolderContextMenu = (
               top: SCROLL_ITERATION_HEIGHT,
             });
           },
-          label: "Scroll Down",
+          label: "向下滚动",
         },
       ];
     }
@@ -393,19 +393,19 @@ const useFolderContextMenu = (
               ]),
         ],
       },
-      { action: () => updateFolder(url), label: "Refresh" },
+      { action: () => updateFolder(url), label: "刷新" },
       ...(isDesktop
         ? [
             MENU_SEPERATOR,
             {
-              label: "Background",
+              label: "背景",
               menu: [
                 ...(isMusicVisualizationRunning
                   ? [
                       {
                         action: stopGlobalMusicVisualization,
                         checked: true,
-                        label: "Music Visualization",
+                        label: "音乐可视化",
                       },
                       MENU_SEPERATOR,
                     ]
@@ -435,7 +435,7 @@ const useFolderContextMenu = (
               ],
             },
             {
-              label: "Window close effect",
+              label: "窗口关闭特效",
               menu: CLOSE_EFFECT_NAMES.map((effectName) => ({
                 action: () => setCloseEffect(effectName),
                 label: effectName,
@@ -461,35 +461,35 @@ const useFolderContextMenu = (
             ...FS_COMMANDS,
             {
               action: () => open("Terminal", { url }),
-              label: "Open Terminal here",
+              label: "在此处打开终端",
             },
             MENU_SEPERATOR,
             {
               action: () => pasteToFolder(event),
               disabled: Object.keys(pasteList).length === 0,
-              label: "Paste",
+              label: "粘贴",
             },
             MENU_SEPERATOR,
             {
-              label: "New",
+              label: "新建",
               menu: [
                 {
                   action: () => newEntry(NEW_FOLDER, undefined, event),
                   icon: FOLDER_ICON,
-                  label: "Folder",
+                  label: "文件夹",
                 },
                 MENU_SEPERATOR,
                 {
                   action: () =>
                     newEntry(NEW_RTF_DOCUMENT, Buffer.from(""), event),
                   icon: getIconByFileExtension(".whtml"),
-                  label: "Rich Text Document",
+                  label: "富文本文档",
                 },
                 {
                   action: () =>
                     newEntry(NEW_TEXT_DOCUMENT, Buffer.from(""), event),
                   icon: getIconByFileExtension(".txt"),
-                  label: "Text Document",
+                  label: "文本文档",
                 },
               ],
             },
@@ -510,7 +510,7 @@ const useFolderContextMenu = (
                         open("Properties", { url });
                       }
                     },
-                    label: "Properties",
+                    label: "属性",
                   },
                 ]),
           ]),
@@ -531,7 +531,7 @@ const useFolderContextMenu = (
                 open("MonacoEditor", { url: INDEX_FILE });
                 updateRecentFiles(INDEX_FILE, "MonacoEditor");
               },
-              label: "View page source",
+              label: "查看页面源代码",
             },
           ]
         : []),

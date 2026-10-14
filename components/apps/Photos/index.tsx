@@ -174,14 +174,14 @@ const Photos: FC<ComponentProcessProps> = ({ id }) => {
         <Button
           disabled={!url || scale === maxScale || brokenImage}
           onClick={zoomIn}
-          {...label("Zoom in")}
+          {...label("放大")}
         >
           <ZoomIn />
         </Button>
         <Button
           disabled={!url || scale === minScale || brokenImage}
           onClick={zoomOut}
-          {...label("Zoom out")}
+          {...label("缩小")}
         >
           <ZoomOut />
         </Button>

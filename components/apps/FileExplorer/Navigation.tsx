@@ -22,7 +22,7 @@ import Button from "styles/common/Button";
 import { ROOT_NAME } from "utils/constants";
 import { haltEvent, label } from "utils/functions";
 
-const RECENT_LOCATIONS = "Recent locations";
+const RECENT_LOCATIONS = "最近位置";
 
 type NavigationProps = {
   addressBarRef: React.RefObject<HTMLInputElement | null>;
@@ -145,7 +145,7 @@ const Navigation: FC<NavigationProps> = ({
         onClick={() => changeUrl(id, dirname(url))}
         {...label(
           url === "/"
-            ? "Up one level"
+            ? "上一级"
             : `Up to "${upTo === "" ? ROOT_NAME : upTo}"`
         )}
       >

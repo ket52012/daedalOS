@@ -276,7 +276,7 @@ const useFileContextMenu = (
               : IMAGE_ENCODE_FORMATS;
 
             menuItems.unshift(MENU_SEPERATOR, {
-              label: "Convert to",
+              label: "转换为",
               menu: ENCODE_FORMATS.filter(
                 (format) => format !== pathExtension
               ).map((format) => {
@@ -356,7 +356,7 @@ const useFileContextMenu = (
 
           if (canDecodeSpreadsheet) {
             menuItems.unshift(MENU_SEPERATOR, {
-              label: "Convert to",
+              label: "转换为",
               menu: SPREADSHEET_FORMATS.filter(
                 (format) => format !== pathExtension
               ).map((format) => {
@@ -407,7 +407,7 @@ const useFileContextMenu = (
             if (canShareFile(rootFs?.mountList, path, stats, shareData)) {
               menuItems.unshift({
                 action: () => navigator.share(shareData),
-                label: "Share",
+                label: "分享",
                 SvgIcon: Share,
               });
             }
@@ -488,7 +488,7 @@ const useFileContextMenu = (
 
       menuItems.unshift(MENU_SEPERATOR, {
         action: () => aiCommand("Summarize"),
-        label: "Summarize Text (AI)",
+        label: "AI 总结文本",
       });
     }
 
@@ -548,7 +548,7 @@ const useFileContextMenu = (
           MENU_SEPERATOR,
           {
             action: () => open("OpenWith", { url }),
-            label: "Choose another app",
+            label: "选择其他应用",
           },
         ],
         primary: !pid,
@@ -583,7 +583,7 @@ const useFileContextMenu = (
           action: () => {
             openFile(pid, pidIcon);
           },
-          label: "Open in new window",
+          label: "在新窗口中打开",
         });
       }
 

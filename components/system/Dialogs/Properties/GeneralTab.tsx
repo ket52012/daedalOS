@@ -202,9 +202,9 @@ const GeneralTab: FC<TabProps> = ({
               <th scope="row">{isDirectory ? "Type:" : "Type of file:"}</th>
               <td>
                 {isDirectory
-                  ? "File folder"
+                  ? "文件夹"
                   : isShortcut || extType
-                    ? `${isShortcut ? "Shortcut" : extType} (${extension})`
+                    ? `${isShortcut ? "快捷方式" : extType} (${extension})`
                     : "File"}
               </td>
             </tr>

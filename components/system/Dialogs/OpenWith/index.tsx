@@ -192,7 +192,7 @@ const OpenWith: FC<ComponentProcessProps> = ({ id }) => {
         </StyledOpenWithList>
       </div>
       <nav role="presentation">
-        <Button onClick={() => runApp(selectedPid)}>OK</Button>
+        <Button onClick={() => runApp(selectedPid)}>确定</Button>
       </nav>
     </StyledOpenWith>
   );

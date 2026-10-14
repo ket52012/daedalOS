@@ -194,7 +194,7 @@ const BlobImage: FC<{ blob: Blob }> = ({ blob }) => {
   }, [blob]);
 
   // eslint-disable-next-line unicorn/no-null
-  return src ? <img alt="Attachment" src={src} /> : null;
+  return src ? <img alt="附件" src={src} /> : null;
 };
 
 const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
@@ -702,7 +702,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
             <Button
               className="close"
               onClick={() => closeAI(isKeyboardNavigating())}
-              {...label("Close")}
+              {...label("关闭")}
             >
               <CloseIcon />
             </Button>
@@ -717,7 +717,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
           <div className="convo-style">
             Choose a conversation style
             <div
-              aria-label="Choose a conversation style"
+              aria-label="选择对话风格"
               className="buttons"
               role="group"
             >
@@ -728,7 +728,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                 type="button"
                 {...label(
                   "Start an original and imaginative chat",
-                  "More Creative"
+                  "更有创意"
                 )}
               >
                 <h4 role="none">More</h4>
@@ -739,7 +739,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                 className={convoStyle === "balanced" ? "selected" : ""}
                 onClick={() => changeConvoStyle("balanced")}
                 type="button"
-                {...label("For everyday, informed chats", "More Balanced")}
+                {...label("For everyday, informed chats", "更均衡")}
               >
                 <h4 role="none">More</h4>
                 <h2 role="none">Balanced</h2>
@@ -751,7 +751,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                 type="button"
                 {...label(
                   "Start a concise chat, useful for fact-finding",
-                  "More Precise"
+                  "更精确"
                 )}
               >
                 <h4 role="none">More</h4>
@@ -862,7 +862,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                       }
                     }}
                     type="button"
-                    {...label(copiedIndex === index ? "Copied" : "Copy")}
+                    {...label(copiedIndex === index ? "已复制" : "复制")}
                   >
                     <CopyIcon />
                   </button>
@@ -878,7 +878,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                         }
                       }}
                       type="button"
-                      {...label("Edit")}
+                      {...label("编辑")}
                     >
                       <EditIcon />
                     </button>
@@ -892,7 +892,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                         )
                       }
                       type="button"
-                      {...label("Read aloud")}
+                      {...label("朗读")}
                     >
                       <SpeakIcon />
                     </button>
@@ -1010,7 +1010,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                     )
                   }
                   type="button"
-                  {...label("Remove image")}
+                  {...label("移除图片")}
                 >
                   <CloseIcon />
                 </button>
@@ -1020,7 +1020,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
         )}
         <textarea
           ref={textAreaRef}
-          aria-label="Ask me anything"
+          aria-label="问我任何问题"
           disabled={responseError === "context"}
           onBlur={autoSizeText}
           onChange={(event) => {
@@ -1049,7 +1049,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
           className="new-topic"
           onClick={newTopic}
           type="button"
-          {...label("New topic")}
+          {...label("新话题")}
         >
           <ChatIcon />
         </button>
@@ -1059,7 +1059,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
               className="add-image"
               onClick={() => fileInputRef.current?.click()}
               type="button"
-              {...label("Add an image")}
+              {...label("添加图片")}
             >
               <ImageIcon />
             </button>

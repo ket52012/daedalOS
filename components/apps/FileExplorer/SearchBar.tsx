@@ -86,7 +86,7 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
           } else if (searchBarRef.current?.value) {
             const searchBarRect = searchBarRef.current.getBoundingClientRect();
 
-            contextMenu(() => items, "Search suggestions").onContextMenuCapture(
+            contextMenu(() => items, "搜索建议").onContextMenuCapture(
               undefined,
               searchBarRect,
               {
@@ -120,9 +120,9 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
           setSearchTerm(target.value);
         }}
         onFocus={() => preloadLibs([SEARCH_LIB, FILE_INDEX])}
-        placeholder="Search"
+        placeholder="搜索"
         {...SEARCH_INPUT_PROPS}
-        aria-label="Search Box"
+        aria-label="搜索框"
       />
       <Search />
     </StyledSearch>

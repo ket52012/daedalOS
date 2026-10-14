@@ -40,16 +40,16 @@ const useTaskbarContextMenu = (onStartButton = false): ContextMenuCapture => {
       menuItems.unshift(
         {
           action: () => open("Terminal"),
-          label: "Terminal",
+          label: "终端",
         },
         MENU_SEPERATOR,
         {
           action: () => open("FileExplorer"),
-          label: "File Explorer",
+          label: "文件管理器",
         },
         {
           action: () => open("Run"),
-          label: "Run",
+          label: "运行",
         },
         MENU_SEPERATOR
       );

@@ -52,7 +52,7 @@ const Taskbar: FC = () => {
         {searchVisible && <Search key="search" toggleSearch={toggleSearch} />}
       </AnimatePresence>
       <StyledTaskbar
-        aria-label="Taskbar"
+        aria-label="任务栏"
         onKeyDown={(event) => {
           if (
             focusByKey(

@@ -13,7 +13,7 @@ const PDF: FC<ComponentProcessProps> = ({ id }) => {
     <>
       <StyledPDF
         ref={containerRef}
-        aria-label="Pages"
+        aria-label="页数"
         role="region"
         tabIndex={0}
         {...useFileDrop({ id })}

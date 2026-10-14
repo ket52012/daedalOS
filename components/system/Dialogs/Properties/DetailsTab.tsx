@@ -38,7 +38,7 @@ const DetailsTab: FC<TabProps> = ({
     <>
       <StyledDetailsTab aria-busy={loading || undefined} {...tabPanel}>
         {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Like the scrolling list of Windows, which not every browser lets Tab reach */}
-        <table aria-label="Details" tabIndex={0}>
+        <table aria-label="详细信息" tabIndex={0}>
           <thead>
             <tr>
               <th className="property" scope="col">

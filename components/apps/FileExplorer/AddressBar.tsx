@@ -90,7 +90,7 @@ const AddressBar: FCWithRef<HTMLInputElement, AddressBarProps> = ({
       <Icon alt="" imgSize={16} src={icon} />
       <input
         ref={addressBarRef}
-        aria-label="Address"
+        aria-label="地址栏"
         className={inputing ? "inputing" : ""}
         onBlurCapture={({ relatedTarget }) => {
           if (actionButtonRef.current !== relatedTarget) {
